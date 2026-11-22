@@ -264,6 +264,7 @@ typedef struct {
     uint32_t aa_sx, aa_sy;
     uint32_t gen;              /* bumped by every draw and clear into it */
     uint32_t sig;              /* hp1-xbox-port: guest bytes under it when last a target (surf_sig) */
+    __strong id<MTLTexture> opaque;   /* hpcos-xbox-port: tex viewed with alpha 1 (no-alpha formats) */
 } MtSurf;
 
 typedef struct {
@@ -737,6 +738,7 @@ static id<MTLTexture> make_texture(MTLTextureType type, MTLPixelFormat fmt, uint
 static void surf_reset(MtSurf *s)
 {
     s->tex = nil;
+    s->opaque = nil;
     s->va = s->w = s->h = s->pw = s->ph = s->used = s->aa_sx = s->aa_sy = s->gen = 0;
 }
 
@@ -1705,6 +1707,24 @@ static void bind_stage(const uint32_t *regs, int i, float scale[2], __strong id<
         }
     } else if (rt) {
         *tex_out = rt->tex;
+        /* hpcos-xbox-port: a target sampled through a format without alpha
+         * (R5G6B5, X1R5G5B5, X8R8G8B8, swizzled or linear) reads alpha 1 on
+         * the chip; the surface's texture holds whatever alpha its clears and
+         * draws left (CoS's 1024x1024 light target is cleared to alpha 0,
+         * and the yard's ground, which multiplies by it, vanished). */
+        if (rt->tex && (color == 0x03 || color == 0x05 || color == 0x07 || color == 0x11
+                        || color == 0x1C || color == 0x1E)) {
+            if (!rt->opaque || rt->opaque.parentTexture != rt->tex)
+                rt->opaque = [rt->tex newTextureViewWithPixelFormat:rt->tex.pixelFormat
+                                                        textureType:rt->tex.textureType
+                                                             levels:NSMakeRange(0, rt->tex.mipmapLevelCount)
+                                                             slices:NSMakeRange(0, 1)
+                                                            swizzle:MTLTextureSwizzleChannelsMake(
+                                                                MTLTextureSwizzleRed, MTLTextureSwizzleGreen,
+                                                                MTLTextureSwizzleBlue, MTLTextureSwizzleOne)];
+            if (rt->opaque)
+                *tex_out = rt->opaque;
+        }
         *sampled = rt;
         rt_scale(w, h, rt->w, rt->h, rt->aa_sx, rt->aa_sy, scale);
     } else {
@@ -3730,6 +3750,18 @@ static void mtl_clear(const Nv2aSurface *sf, const Nv2aRenderState *rs,
         dz = d && (flags & 0x3);
         if (!color && !dz)
             return;
+        {   /* hpcos-xbox-port: SET_COLOR_CLEAR_VALUE is in the surface's own pixel format:
+             * a 16-bit target (R5G6B5 3, X1R5G5B5 1/2) takes a packed 16-bit value (CoS's light
+             * target clears to 0x7BEF, a mid grey, which as ARGB8888 was blue). */
+            uint32_t cf = s_regs ? (s_regs[0x208 / 4] & 0xF) : 8;
+            if (cf == 3) {
+                uint32_t r5 = (argb >> 11) & 0x1F, g6 = (argb >> 5) & 0x3F, b5 = argb & 0x1F;
+                argb = 0xFF000000u | ((r5 << 3 | r5 >> 2) << 16) | ((g6 << 2 | g6 >> 4) << 8) | (b5 << 3 | b5 >> 2);
+            } else if (cf == 1 || cf == 2) {
+                uint32_t r5 = (argb >> 10) & 0x1F, g5 = (argb >> 5) & 0x1F, b5 = argb & 0x1F;
+                argb = 0xFF000000u | ((r5 << 3 | r5 >> 2) << 16) | ((g5 << 3 | g5 >> 2) << 8) | (b5 << 3 | b5 >> 2);
+            }
+        }
         argb_vec4(argb, c);
         if (dz) {
             uint32_t zmax = s_regs ? zmax_of(s_regs) : 0xFFFFFFu;
