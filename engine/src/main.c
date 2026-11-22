@@ -422,6 +422,12 @@ static int game_main(void)
 
     xbox_WatchdogStart();
 
+    {   /* DirectSound's code: its MmGetPhysicalAddress answers for heap buffers are tagged for the APU */
+        extern void xbox_SetDsoundRange(uint32_t lo, uint32_t hi);
+        const char *e = getenv("HPCOS_DS_TAG");
+        if (!(e && *e == '0'))
+            xbox_SetDsoundRange(0x001444E0u, 0x001444E0u + 40740u);
+    }
     printf("Starting guest at 0x%08X (esp=0x%08X)\n", HPCOS_ENTRY_POINT, g_esp);
     xbox_gil_mark_main();      /* the frame-rate thread (RECOMP_GIL_EAGER) */
     xbox_gil_enter();          /* guest code from here on (kernel_bridge.c) */

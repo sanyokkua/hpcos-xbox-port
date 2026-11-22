@@ -105,6 +105,8 @@ extern uint8_t *g_apu_ram_ptr; /* Set at init: host address of guest VA 0 */
 extern int xbox_ContiguousIsPhysical(uint32_t phys);
 static inline uint8_t *apu_phys(hwaddr addr) {
     uint32_t p = (uint32_t)addr & 0x03FFFFFF;
+    if ((uint32_t)addr & 0x04000000u)       /* hpcos-xbox-port: a heap buffer DirectSound */
+        return g_apu_ram_ptr + p;           /* tagged (bridge_MmGetPhysicalAddress): plain VA */
     return g_apu_ram_ptr + (xbox_ContiguousIsPhysical(p) ? 0x80000000u + p : p);
 }
 

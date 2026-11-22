@@ -988,8 +988,10 @@ void sub_00133790(void)
  * chains 8 KB chunks through that callback (0x1136C0) never finishes: the main thread polls
  * it forever (a hang at a loading screen, ~1 boot in 8). On the console the worker blocks on
  * the DVD for milliseconds, so the hook always came first; here reads complete at once. So
- * while a game thread is between the two calls, the worker waits at the top of its loop
- * (before it takes the queue's lock), 200 ms at most. The worker's own chained requests
+ * while the main thread is between the two calls, the worker waits at the top of its loop
+ * (before it takes the queue's lock), 200 ms at most. The main thread also queues reads it
+ * only polls: its next file-cache call (another request, a status poll) ends the hold, as a
+ * hold kept to the bound starved the menu music (0.25 s of sound a second). The worker's own chained requests
  * (from 0x1136C0, return 0x11371E) do not count. HPCOS_CACHE_HOLD=0 turns it off. */
 static volatile int s_fc_owner;            /* thread number of the game thread between the calls, 0 none */
 static volatile uint64_t s_fc_since;
@@ -1040,10 +1042,15 @@ static _Thread_local int t_fc_worker;
 extern void sub_00113090_gen(void);
 void sub_00113090(void)
 {
-    if (fc_hold_on() && !t_fc_worker) {
+    extern int xbox_is_guest_main(void);
+    /* the main thread only: it hooks every request it queues. The music streamer
+     * (0x117A97) queues and polls without a hook; holding the worker for it
+     * starved the menu music (0.25 s of sound a second). */
+    if (fc_hold_on() && !t_fc_worker && xbox_is_guest_main()) {
         s_fc_since = fc_now_ns();
         __atomic_store_n(&s_fc_owner, fc_me(), __ATOMIC_RELEASE);
     }
+    if (fc_trace()) fprintf(stderr, "[fc] t%d alloc from %08X main %d\n", fc_me(), MEM32(esp), xbox_is_guest_main());
     sub_00113090_gen();
 }
 
@@ -1073,11 +1080,25 @@ void sub_00114EB0(void)
     sub_00114EB0_gen();
 }
 
+static void fc_owner_moves_on(void)
+{
+    static int rel = -1;
+    if (rel < 0) { const char *e = getenv("HPCOS_CACHE_RELEASE"); rel = !(e && *e == '0'); }
+    if (rel && s_fc_owner == fc_me()) __atomic_store_n(&s_fc_owner, 0, __ATOMIC_RELEASE);
+}
+
+/* the other status polls end the hold too */
+extern void sub_001129D0_gen(void);
+void sub_001129D0(void) { fc_owner_moves_on(); sub_001129D0_gen(); }
+extern void sub_00112BA0_gen(void);
+void sub_00112BA0(void) { fc_owner_moves_on(); sub_00112BA0_gen(); }
+
 /* HPCOS_FC_TRACE=1: the file cache's status poll sub_001138B0(handle): its entry once a second while polled */
 extern void sub_001138B0_gen(void);
 void sub_001138B0(void)
 {
     uint32_t h = MEM32(esp + 4);
+    fc_owner_moves_on();
     sub_001138B0_gen();
     if (fc_trace()) {
         static uint64_t last; static uint32_t lh;
@@ -1118,4 +1139,21 @@ void sub_00018D40(void)
         }
     }
     sub_00018D40_gen();
+}
+
+/* Debug: HPCOS_DS_TRACE=1 -- IDirectSoundBuffer::GetCurrentPosition(this, &play, &write), stdcall,
+ * each buffer's cursors and the caller, at most 400 lines (the music streamer's view). */
+extern void sub_00145337_gen(void);
+void sub_00145337(void)
+{
+    static int on = -1, n;
+    uint32_t self = MEM32(esp + 4), pp = MEM32(esp + 8), pw = MEM32(esp + 12), ret = MEM32(esp);
+    if (on < 0) { const char *e = getenv("HPCOS_DS_TRACE"); on = e && *e == '1'; }
+    sub_00145337_gen();
+    if (on && n++ < 400) {
+        struct timespec ts;
+        clock_gettime(CLOCK_MONOTONIC, &ts);
+        fprintf(stderr, "[ds] %.3f buf %08X play %u write %u from %08X -> %08X\n", ts.tv_sec + ts.tv_nsec / 1e9,
+                self, pp ? MEM32(pp) : 0xFFFFFFFFu, pw ? MEM32(pw) : 0xFFFFFFFFu, ret, eax);
+    }
 }

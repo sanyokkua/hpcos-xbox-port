@@ -629,6 +629,7 @@ int xbox_thread_holds_dispatch(void);     /* kernel_hal.c */
  * ISRs and DPCs are never pre-empted (t_gil_nopreempt), as before. */
 static RECOMP_TLS int t_gil_main;
 void xbox_gil_mark_main(void) { t_gil_main = 1; }
+int xbox_is_guest_main(void) { return t_gil_main; }   /* hpcos-xbox-port */
 
 static int gil_eager(void)
 {
@@ -2513,6 +2514,10 @@ static void bridge_NtYieldExecution(void)
     g_eax = (uint32_t)xbox_NtYieldExecution();
 }
 
+static uint32_t s_dsound_lo, s_dsound_hi;
+/* hpcos-xbox-port: the title's DSOUND code range (see bridge_MmGetPhysicalAddress). */
+void xbox_SetDsoundRange(uint32_t lo, uint32_t hi) { s_dsound_lo = lo; s_dsound_hi = hi; }
+
 /* ── MmGetPhysicalAddress (ordinal 173) ──────────────────── */
 static void bridge_MmGetPhysicalAddress(void)
 {
@@ -2523,6 +2528,16 @@ static void bridge_MmGetPhysicalAddress(void)
      * are static and driven by guest CPU state, and nothing in tests/ can
      * reach them. */
     g_eax = (uint32_t)xbox_MmGetPhysicalAddress((PVOID)(uintptr_t)addr);
+    /* hpcos-xbox-port: on the console a heap buffer's pages and the contiguous
+     * window are the same RAM; here they are two memories, and a heap VA handed
+     * back unchanged collides with the contiguous arena's physical range, so the
+     * APU read the window's bytes instead (Chamber of Secrets' PCM movie sound:
+     * screeching and clicks). For DirectSound's callers (xbox_SetDsoundRange) a
+     * heap address comes back with bit 26 set, which the APU reads as a plain VA
+     * (apu_phys). Above 64 MB, so it cannot be a real physical address. */
+    if (g_eax == addr && addr < 0x04000000u && s_dsound_hi
+            && g_xbox_kernel_caller >= s_dsound_lo && g_xbox_kernel_caller < s_dsound_hi)
+        g_eax = addr | 0x04000000u;
 }
 
 /* ── MmSetAddressProtect (ordinal 182) ───────────────────── */

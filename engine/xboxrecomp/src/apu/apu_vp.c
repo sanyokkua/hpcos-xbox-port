@@ -908,6 +908,25 @@ static int voice_get_samples(MCPXAPUState *d, uint32_t v, float samples[][2],
         }
         assert(seg_len > 0);
         ebo = seg_len - 1;
+        if (cbo == 0)   /* hpcos-xbox-port: a stream segment begins */
+            VLOG("v%03X seg page %d off %08X len %d cs %d spb %d s %d (voice cs %u ss %u spb %u)\n",
+                 (unsigned long)GetTickCount(), (unsigned)v, page, (unsigned)segment_offset, seg_len, seg_cs,
+                 seg_spb, seg_s, container_size_index, sample_size, samples_per_block);
+        if (cbo == 0 && vlog_on()) {
+            int16_t q[8]; int peak = 0, k2;
+            memcpy(q, apu_phys(segment_offset + (hwaddr)seg_len * 2), sizeof q);
+            for (k2 = 0; k2 < seg_len * 2 && k2 < 20000; k2++) {
+                int16_t x = *(int16_t *)apu_phys(segment_offset + (hwaddr)k2 * 2);
+                if (abs(x) > peak) peak = abs(x);
+            }
+            memcpy(q, apu_phys(segment_offset), sizeof q);
+            {   int16_t lo[8], hi[8]; uint32_t p2 = (uint32_t)segment_offset & 0x03FFFFFF;
+                memcpy(lo, g_apu_ram_ptr + p2 + 4096, sizeof lo); memcpy(hi, g_apu_ram_ptr + 0x80000000u + p2 + 4096, sizeof hi);
+                fprintf(stderr, "[VOICE]   +4K at VA %08X: %d %d %d %d | at VA %08X: %d %d %d %d\n", p2, lo[0], lo[1], lo[2], lo[3],
+                        0x80000000u + p2, hi[0], hi[1], hi[2], hi[3]); }
+            fprintf(stderr, "[VOICE]   data %d %d %d %d %d %d %d %d peak %d contig %d\n", q[0], q[1], q[2], q[3],
+                    q[4], q[5], q[6], q[7], peak, xbox_ContiguousIsPhysical((uint32_t)segment_offset & 0x03FFFFFF));
+        }
     }
 
     bool adpcm =
