@@ -925,3 +925,115 @@ void sub_00133790(void)
     sub_00133790_gen();
 }
 #undef OV_ARG
+
+/* ── File cache: the console's DVD latency between "queue a read" and "register its callback" ──
+ * The file cache (worker thread 0x1146C0, loop 0x1125A0) serves read requests that a game
+ * thread queues with sub_001133F0 and then hooks with sub_00112E20(request, callback). The
+ * hook finds the request queued, in progress, or finished-but-not-reaped and attaches or
+ * calls the callback; a request the worker has already reaped gets none, and the reader that
+ * chains 8 KB chunks through that callback (0x1136C0) never finishes: the main thread polls
+ * it forever (a hang at a loading screen, ~1 boot in 8). On the console the worker blocks on
+ * the DVD for milliseconds, so the hook always came first; here reads complete at once. So
+ * while a game thread is between the two calls, the worker waits at the top of its loop
+ * (before it takes the queue's lock), 200 ms at most. The worker's own chained requests
+ * (from 0x1136C0, return 0x11371E) do not count. HPCOS_CACHE_HOLD=0 turns it off. */
+static volatile int s_fc_owner;            /* thread number of the game thread between the calls, 0 none */
+static volatile uint64_t s_fc_since;
+static _Thread_local int t_fc_me;
+static volatile int s_fc_next;
+
+static int fc_me(void)
+{
+    if (!t_fc_me) t_fc_me = __atomic_add_fetch(&s_fc_next, 1, __ATOMIC_RELAXED);
+    return t_fc_me;
+}
+
+static uint64_t fc_now_ns(void)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000000000ull + (uint64_t)ts.tv_nsec;
+}
+
+static int fc_trace(void)
+{
+    static int on = -1;
+    if (on < 0) { const char *e = getenv("HPCOS_FC_TRACE"); on = e && *e == '1'; }
+    return on;
+}
+
+static int fc_hold_on(void)
+{
+    static int on = -1;
+    if (on < 0) { const char *e = getenv("HPCOS_CACHE_HOLD"); on = !(e && *e == '0'); }
+    return on;
+}
+
+extern void sub_001133F0_gen(void);
+void sub_001133F0(void)
+{
+    int me = fc_me();
+    {
+        uint32_t ret = MEM32(esp), a0 = MEM32(esp + 4), a1 = MEM32(esp + 8);
+        sub_001133F0_gen();
+        if (fc_trace()) fprintf(stderr, "[fc] t%d queue(%08X,%08X) from %08X -> %08X\n", me, a0, a1, ret, eax);
+    }
+}
+
+/* Every queue function (0x1133F0 read, 0x113300, 0x113460, ...) allocates its request here
+ * (under the request pool's lock) before it queues it and sets the worker's event. */
+static _Thread_local int t_fc_worker;
+extern void sub_00113090_gen(void);
+void sub_00113090(void)
+{
+    if (fc_hold_on() && !t_fc_worker) {
+        s_fc_since = fc_now_ns();
+        __atomic_store_n(&s_fc_owner, fc_me(), __ATOMIC_RELEASE);
+    }
+    sub_00113090_gen();
+}
+
+extern void sub_00112E20_gen(void);
+void sub_00112E20(void)
+{
+    int me = fc_me();
+    uint32_t ret = MEM32(esp), h = MEM32(esp + 4), cb = MEM32(esp + 8);
+    sub_00112E20_gen();
+    if (fc_trace()) fprintf(stderr, "[fc] t%d hook(%08X,%08X) from %08X -> %08X\n", me, h, cb, ret, eax);
+    if (s_fc_owner == me) __atomic_store_n(&s_fc_owner, 0, __ATOMIC_RELEASE);
+}
+
+extern void sub_00114EB0_gen(void);
+void sub_00114EB0(void)
+{
+    if (MEM32(esp) == 0x001125DEu && fc_hold_on()) {     /* the worker's loop, before its queue lock */
+        int me = fc_me(), owner;
+        t_fc_worker = 1;
+        while ((owner = __atomic_load_n(&s_fc_owner, __ATOMIC_ACQUIRE)) && owner != me
+               && fc_now_ns() - s_fc_since < 200000000ull) {
+            int d = xbox_gil_suspend();
+            usleep(100);
+            xbox_gil_resume(d);
+        }
+    }
+    sub_00114EB0_gen();
+}
+
+/* HPCOS_FC_TRACE=1: the file cache's status poll sub_001138B0(handle): its entry once a second while polled */
+extern void sub_001138B0_gen(void);
+void sub_001138B0(void)
+{
+    uint32_t h = MEM32(esp + 4);
+    sub_001138B0_gen();
+    if (fc_trace()) {
+        static uint64_t last; static uint32_t lh;
+        uint64_t now = fc_now_ns();
+        if (h != lh || now - last > 1000000000ull) {
+            uint32_t tab = MEM32(0x0054AE2Cu), e = tab + (h & 0xFF) * 48u;
+            last = now; lh = h;
+            fprintf(stderr, "[fc] poll %08X -> %08X entry %08X: %08X %08X %08X %08X %08X %08X %08X %08X %08X %08X %08X %08X\n",
+                    h, eax, e, MEM32(e), MEM32(e+4), MEM32(e+8), MEM32(e+12), MEM32(e+16), MEM32(e+20), MEM32(e+24),
+                    MEM32(e+28), MEM32(e+32), MEM32(e+36), MEM32(e+40), MEM32(e+44));
+        }
+    }
+}
