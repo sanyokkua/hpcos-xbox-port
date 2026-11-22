@@ -2052,6 +2052,15 @@ static MtProg *prog_get(const Nv2aRawBatch *b, const Nv2aPshKey *pk)
         LOGE("shader generation failed (vertex program %016llX)\n", (unsigned long long)vkey);
         return NULL;
     }
+    {   /* hpcos-xbox-port: RECOMP_VS_DUMP=<dir> writes the first 40 vertex programs' MSL (debug) */
+        static int n;
+        const char *dir = getenv("RECOMP_VS_DUMP");
+        if (dir && *dir && n < 40) {
+            char path[600]; FILE *f;
+            snprintf(path, sizeof path, "%s/vs_%02d_%016llX.metal", dir, n++, (unsigned long long)vkey);
+            if ((f = fopen(path, "w"))) { fputs(vsrc, f); fclose(f); }
+        }
+    }
     vl = compile(vsrc, "vertex");
     fl = compile(fsrc, "fragment");
     if (!vl || !fl)
@@ -2689,6 +2698,11 @@ static id<MTLDepthStencilState> ds_get(const DsKey *k)
             return s_ds[i].ds;
     d = [MTLDepthStencilDescriptor new];
     d.depthCompareFunction = k->dtest ? cmp_op(k->dop, 0x203) : MTLCompareFunctionAlways;
+    {   /* hpcos-xbox-port: RECOMP_MTL_NODEPTH=1 (debug): no depth test anywhere */
+        static int nd = -1;
+        if (nd < 0) { const char *e = getenv("RECOMP_MTL_NODEPTH"); nd = e && *e == '1'; }
+        if (nd) d.depthCompareFunction = MTLCompareFunctionAlways;
+    }
     d.depthWriteEnabled = k->dwrite ? YES : NO;
     if (k->stest) {
         MTLStencilDescriptor *s = [MTLStencilDescriptor new];
@@ -3518,6 +3532,23 @@ static void mtl_draw_raw_inner(const Nv2aRawBatch *b)
         vb.aa[0] = b->aa_sx > 0 ? b->aa_sx : 1.0f;
         vb.aa[1] = b->aa_sy > 0 ? b->aa_sy : 1.0f;
         vb.xform = b->xform == 1 ? 1 : 0;
+        /* hpcos-xbox-port: the fog unit's state (SET_FOG_ENABLE/MODE/GEN_MODE/PARAMS/PLANE) */
+        vb.fog[0] = r[0x2A4 / 4] != 0;
+        vb.fog[1] = (int32_t)r[0x29C / 4];
+        vb.fog[2] = (int32_t)r[0x2A0 / 4];
+        memcpy(vb.fogp, &r[0x9C0 / 4], 2 * sizeof(float));
+        memcpy(vb.fogplane, &r[0x9D0 / 4], sizeof vb.fogplane);
+        {
+            static int said;
+            static int32_t last[3]; static float lastp[2];
+            if (said < 12 && (memcmp(last, vb.fog, sizeof last) || memcmp(lastp, vb.fogp, sizeof lastp))) {
+                said++; memcpy(last, vb.fog, sizeof last); memcpy(lastp, vb.fogp, sizeof lastp);
+                fprintf(stderr, "[fog] enable %d mode %X gen %d params %g %g color %08X (xform %d) control0 %08X surfmt %08X zclear %08X\n",
+                        vb.fog[0], vb.fog[1], vb.fog[2], vb.fogp[0], vb.fogp[1], r[0x2A8 / 4], b->xform, r[0x290 / 4], r[0x208 / 4], r[0x1D8C / 4]);
+                { float cmin, cmax; memcpy(&cmin, &r[0x394 / 4], 4); memcpy(&cmax, &r[0x398 / 4], 4);
+                  fprintf(stderr, "[fog]   clip min %g max %g zfunc %X\n", cmin, cmax, r[0x354 / 4]); }
+            }
+        }
         if (vb.xform == 1) {
             int k, c;
             memcpy(vb.mv, &r[0x480 / 4], sizeof vb.mv);
@@ -3556,6 +3587,11 @@ static void mtl_draw_raw_inner(const Nv2aRawBatch *b)
             fb.fog[2] = byte_f(fc, 16); fb.fog[3] = byte_f(fc, 24);
         }
         fb.afunc = r[0x300 / 4] ? (int32_t)r[0x33C / 4] : 0x207;
+        {   /* hpcos-xbox-port: RECOMP_MTL_NOATEST=1 (debug): no alpha test */
+            static int na = -1;
+            if (na < 0) { const char *e = getenv("RECOMP_MTL_NOATEST"); na = e && *e == '1'; }
+            if (na) fb.afunc = 0x207;
+        }
         fb.aref = (float)(r[0x340 / 4] & 0xFF);
         if (!s_fs_valid || memcmp(&fb, &s_fs_cur, sizeof fb)) {
             [s_enc setFragmentBytes:&fb length:sizeof fb atIndex:NV2A_MSL_FS_BLOCK];
@@ -3681,10 +3717,10 @@ static void mtl_clear(const Nv2aSurface *sf, const Nv2aRenderState *rs,
         if (!rect.width || !rect.height)
             return;
         if (capturing() || s_dl_frame(s_frame))
-            fprintf(stderr, "[clr] f%u rt %08X %ux%u (stored %ux%u) depth %ux%u rect %lu,%lu %lux%lu flags %X argb %08X\n",
+            fprintf(stderr, "[clr] f%u rt %08X %ux%u (stored %ux%u) depth %ux%u rect %lu,%lu %lux%lu flags %X argb %08X zs %08X\n",
                     s_frame, s->va, s->w, s->h, s->pw, s->ph, d ? d->pw : 0, d ? d->ph : 0,
                     (unsigned long)rect.x, (unsigned long)rect.y, (unsigned long)rect.width,
-                    (unsigned long)rect.height, flags, argb);
+                    (unsigned long)rect.height, flags, argb, zstencil);
         color = (flags & 0xF0) == 0xF0;
         if ((flags & 0xF0) && !color) {
             static int warned;

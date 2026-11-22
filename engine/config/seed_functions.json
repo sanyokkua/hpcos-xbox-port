@@ -914,5 +914,53 @@
  {
   "start": "0x00115BA0",
   "note": "[ICALL] Failed to resolve at the EA logo (front end start)"
+ },
+ {
+  "start": "0x0003B290",
+  "note": "[ICALL] Failed to resolve after New Game (level load); after nop padding"
+ },
+ {
+  "start": "0x0011D970",
+  "note": "[ICALL] Failed to resolve after the intro movie; after nop padding"
+ },
+ {
+  "start": "0x00019C30",
+  "note": "function after nop padding the scan missed (gap scan; EA audio/stream code near 0x11Cxxx-0x11Fxxx)"
+ },
+ {
+  "start": "0x00047580",
+  "note": "function after nop padding the scan missed (gap scan; EA audio/stream code near 0x11Cxxx-0x11Fxxx)"
+ },
+ {
+  "start": "0x0011CA40",
+  "note": "function after nop padding the scan missed (gap scan; EA audio/stream code near 0x11Cxxx-0x11Fxxx)"
+ },
+ {
+  "start": "0x0011CBD0",
+  "note": "function after nop padding the scan missed (gap scan; EA audio/stream code near 0x11Cxxx-0x11Fxxx)"
+ },
+ {
+  "start": "0x0011E910",
+  "note": "function after nop padding the scan missed (gap scan; EA audio/stream code near 0x11Cxxx-0x11Fxxx)"
+ },
+ {
+  "start": "0x0011EB90",
+  "note": "function after nop padding the scan missed (gap scan; EA audio/stream code near 0x11Cxxx-0x11Fxxx)"
+ },
+ {
+  "start": "0x0011F100",
+  "note": "function after nop padding the scan missed (gap scan; EA audio/stream code near 0x11Cxxx-0x11Fxxx)"
+ },
+ {
+  "start": "0x0011F770",
+  "note": "function after nop padding the scan missed (gap scan; EA audio/stream code near 0x11Cxxx-0x11Fxxx)"
+ },
+ {
+  "start": "0x0011F890",
+  "note": "function after nop padding the scan missed (gap scan; EA audio/stream code near 0x11Cxxx-0x11Fxxx)"
+ },
+ {
+  "start": "0x0011FC60",
+  "note": "function after nop padding the scan missed (gap scan; EA audio/stream code near 0x11Cxxx-0x11Fxxx)"
  }
 ]

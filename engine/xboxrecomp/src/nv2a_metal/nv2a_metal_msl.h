@@ -35,6 +35,9 @@ typedef struct {
     float   tp[4][4][4];        /* texgen planes per stage, S T R Q (SET_TEXGEN_PLANE) */
     int32_t tg[4][4];           /* texgen mode per stage, S T R Q (0 off, 0x2400 eye, 0x2401 object) */
     int32_t tme[4];             /* texture matrix enabled per stage */
+    int32_t fog[4];             /* hpcos-xbox-port: enable, SET_FOG_MODE, SET_FOG_GEN_MODE, 0 */
+    float   fogp[4];            /* SET_FOG_PARAMS 0, 1 (bias, scale) */
+    float   fogplane[4];        /* SET_FOG_PLANE (planar fog gen) */
 } Nv2aMslVs;
 
 typedef struct {

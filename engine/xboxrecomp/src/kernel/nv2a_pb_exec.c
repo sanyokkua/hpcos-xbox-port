@@ -625,6 +625,22 @@ static int vp_method(uint32_t method, uint32_t param)
         s_vp.const_gen++;
         return 1;
     }
+    /* hpcos-xbox-port: on the chip SET_VIEWPORT_OFFSET (0x0A20) and
+     * SET_VIEWPORT_SCALE (0x0AF0) also load transform constants 59 and 58
+     * (xemu: NV_IGRAPH_XF_XFCTX_VPOFF / VPSCL), the ones a program's screen
+     * mapping reads. XDK 5028 (Chamber of Secrets) sets the viewport only
+     * through these methods; newer XDKs (NFS, HP1) also wrote the constants,
+     * so without this every 3D vertex landed in the top-left pixel. Not a
+     * return: the methods keep their fixed-function meaning. */
+    if (method >= 0x0A20 && method < 0x0A30) {
+        memcpy(&s_vp.c[59][(method - 0x0A20) / 4], &param, 4);
+        s_vp.gen++;
+        s_vp.const_gen++;
+    } else if (method >= 0x0AF0 && method < 0x0B00) {
+        memcpy(&s_vp.c[58][(method - 0x0AF0) / 4], &param, 4);
+        s_vp.gen++;
+        s_vp.const_gen++;
+    }
     switch (method) {
     case NV097_SET_TRANSFORM_PROGRAM_LOAD:  s_vp.prog_load = param;  return 1;
     case NV097_SET_TRANSFORM_PROGRAM_START: s_vp.prog_start = param; s_vp.gen++; s_vp.prog_gen++; return 1;
