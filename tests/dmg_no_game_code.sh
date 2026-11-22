@@ -1,6 +1,6 @@
 #!/bin/bash
 # The players' DMG holds no game code and no game data. Fails on:
-#   - the disc's files by name (*.xbe, *.hog, *.xmv, disk.txt) or *.iso
+#   - the disc's files by name (*.xbe, *.geo, *.gdt, *.sdt, *.snd, *.mus, *.mpf, *.xmv, *.fxm, xbfat.fat) or *.iso
 #   - the lifted C or objects made from it (recomp_*.c but the engine's hand-written recomp_manual.c, recomp_*.o,
 #     recomp_dispatch*) or a game binary (hpcos)
 #   - a file with more than 150 distinct lifted function names (sub_XXXXXXXX; a lifted chunk has ~250-400, recomp_manual.c 37): generated code under another name
@@ -15,8 +15,9 @@ hdiutil attach -quiet -nobrowse -readonly -mountpoint "$MNT" "$DMG"
 trap 'hdiutil detach -quiet "$MNT"; rmdir "$MNT"' EXIT
 fail=0
 bad() { echo "FAIL: $1"; fail=1; }
-while IFS= read -r f; do bad "a game file by name: ${f#$MNT/}"; done < <(find "$MNT" \( -iname '*.xbe' -o -iname '*.hog' \
-  -o -iname '*.xmv' -o -iname disk.txt -o -iname '*.iso' -o \( -name 'recomp_*.c' -not -name recomp_manual.c \) -o -name 'recomp_*.o' \
+while IFS= read -r f; do bad "a game file by name: ${f#$MNT/}"; done < <(find "$MNT" \( -iname '*.xbe' -o -iname '*.geo' -o -iname '*.gdt' -o -iname '*.sdt' \
+  -o -iname '*.snd' -o -iname '*.mus' -o -iname '*.mpf' -o -iname '*.fxm' -o -iname xbfat.fat \
+  -o -iname '*.xmv' -o -iname '*.iso' -o \( -name 'recomp_*.c' -not -name recomp_manual.c \) -o -name 'recomp_*.o' \
   -o -name 'recomp_dispatch*' -o -name hpcos \) -not -path '*/Applications/*')
 GAME="$ROOT/game/extracted"
 python3 -I - "$MNT" "$GAME" <<'PY' || fail=1
