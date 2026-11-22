@@ -1,0 +1,79 @@
+JSON exported to: /Users/ok/Development/Experiments/hpcos-xbox-port/engine/xboxrecomp/tools/disasm/output/default_analysis.json
+  Realigned 3 seeded address(es) the sweep stepped over
+  Realigned 5 call targets the sweep stepped over (0 rejected: bytes do not decode as a function)
+  5 function address(es) installed into indirect-call slots
+  conditional-branch orphans recovered as alias entries
+  tail-jump pass 0: +74 standalone, 13 aliases
+  tail-jump pass 1: +1 standalone, 13 aliases
+  136 function address(es) taken as an immediate
+  functions recovered that follow a ret with no padding
+  1229 function address(es) found in data tables
+Done in 8.62s
+Wrote 6010 ABI entries to /Users/ok/Development/Experiments/hpcos-xbox-port/engine/xboxrecomp/tools/abi_analysis/output/abi_functions.json (75 detected as thiscall)
+Loading data files...
+  SEH helpers: __SEH_prolog 0x00127D40, __SEH_epilog 0x00127D7B
+  CRT non-local jumps: setjmp not found, longjmp not found
+Extended 0x00067AA0 from 0x00067B48 to 0x00067BCB over its inline jump tables
+Loaded 6039 functions, 6125 labels, 8246 classifications, 6010 ABI entries in 16.9s
+
+Translating 6004 functions...
+Excluding 3 functions defined in /Users/ok/Development/Experiments/hpcos-xbox-port/engine/src/recomp_manual.c; 9 wrapped as sub_X_gen
+  wrote recomp_types.h (runtime register model)
+Poll loops marked with RECOMP_SPIN_HINT: 45
+MMIO accessors: 611 functions in DSOUND,XPP
+
+=== Split Translation Complete (19.9s) ===
+6001/6004 functions (0 failed), 913841 lines of C, 25 source files
+99 unresolved call targets stubbed (addresses called but not detected as functions)
+77 instruction(s) unimplemented, emitted as no-op comments (24 distinct mnemonics):
+        23  out          e.g. 0x0007F291
+         9  in           e.g. 0x00064411
+         6  wbinvd       e.g. 0x00014681
+         5  sti          e.g. 0x0004B49C
+         3  bound        e.g. 0x0007624D
+         3  insd         e.g. 0x0007720D
+         3  lcall        e.g. 0x000A0B38
+         3  outsd        e.g. 0x00077215
+         2  arpl         e.g. 0x00076248
+         2  cli          e.g. 0x00111BBE
+         2  insb         e.g. 0x00106EB1
+         2  int1         e.g. 0x00156999
+         2  iretd        e.g. 0x0009D09D
+         2  outsb        e.g. 0x00077221
+         1  aaa          e.g. 0x000C1ACC
+         1  aam          e.g. 0x00032A58
+         1  cmpsd        e.g. 0x000CE620
+         1  daa          e.g. 0x000D2D05
+         1  das          e.g. 0x000945E8
+         1  enter        e.g. 0x000B23B0
+    ... and 4 more
+  /Users/ok/Development/Experiments/hpcos-xbox-port/engine/gen/recomp_funcs.h
+  /Users/ok/Development/Experiments/hpcos-xbox-port/engine/gen/recomp_0000.c
+  /Users/ok/Development/Experiments/hpcos-xbox-port/engine/gen/recomp_0001.c
+  /Users/ok/Development/Experiments/hpcos-xbox-port/engine/gen/recomp_0002.c
+  /Users/ok/Development/Experiments/hpcos-xbox-port/engine/gen/recomp_0003.c
+  /Users/ok/Development/Experiments/hpcos-xbox-port/engine/gen/recomp_0004.c
+  /Users/ok/Development/Experiments/hpcos-xbox-port/engine/gen/recomp_0005.c
+  /Users/ok/Development/Experiments/hpcos-xbox-port/engine/gen/recomp_0006.c
+  /Users/ok/Development/Experiments/hpcos-xbox-port/engine/gen/recomp_0007.c
+  /Users/ok/Development/Experiments/hpcos-xbox-port/engine/gen/recomp_0008.c
+  /Users/ok/Development/Experiments/hpcos-xbox-port/engine/gen/recomp_0009.c
+  /Users/ok/Development/Experiments/hpcos-xbox-port/engine/gen/recomp_0010.c
+  /Users/ok/Development/Experiments/hpcos-xbox-port/engine/gen/recomp_0011.c
+  /Users/ok/Development/Experiments/hpcos-xbox-port/engine/gen/recomp_0012.c
+  /Users/ok/Development/Experiments/hpcos-xbox-port/engine/gen/recomp_0013.c
+  /Users/ok/Development/Experiments/hpcos-xbox-port/engine/gen/recomp_0014.c
+  /Users/ok/Development/Experiments/hpcos-xbox-port/engine/gen/recomp_0015.c
+  /Users/ok/Development/Experiments/hpcos-xbox-port/engine/gen/recomp_0016.c
+  /Users/ok/Development/Experiments/hpcos-xbox-port/engine/gen/recomp_0017.c
+  /Users/ok/Development/Experiments/hpcos-xbox-port/engine/gen/recomp_0018.c
+  /Users/ok/Development/Experiments/hpcos-xbox-port/engine/gen/recomp_0019.c
+  /Users/ok/Development/Experiments/hpcos-xbox-port/engine/gen/recomp_0020.c
+  /Users/ok/Development/Experiments/hpcos-xbox-port/engine/gen/recomp_0021.c
+  /Users/ok/Development/Experiments/hpcos-xbox-port/engine/gen/recomp_0022.c
+  /Users/ok/Development/Experiments/hpcos-xbox-port/engine/gen/recomp_0023.c
+  /Users/ok/Development/Experiments/hpcos-xbox-port/engine/gen/recomp_0024.c
+  /Users/ok/Development/Experiments/hpcos-xbox-port/engine/gen/recomp_stubs_unresolved.c
+  /Users/ok/Development/Experiments/hpcos-xbox-port/engine/gen/recomp_dispatch.c
+
+Summary: /Users/ok/Development/Experiments/hpcos-xbox-port/engine/xboxrecomp/tools/recomp/output/summary.json

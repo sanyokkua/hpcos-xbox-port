@@ -1,0 +1,8 @@
+cmake_minimum_required(VERSION 3.20)
+project(stick_deadzone_test C)
+set(CMAKE_C_STANDARD 11)
+add_executable(stick_deadzone_test test_main.c)
+target_include_directories(stick_deadzone_test PRIVATE ../../src)
+target_link_libraries(stick_deadzone_test PRIVATE m)
+enable_testing()
+add_test(NAME stick_deadzone COMMAND stick_deadzone_test)

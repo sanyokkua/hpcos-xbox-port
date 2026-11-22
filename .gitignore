@@ -1,0 +1,9 @@
+/upstream/
+/engine/gen/
+/game/
+/.venv/
+/logs/
+/build/
+/mirror/
+.DS_Store
+__pycache__/
