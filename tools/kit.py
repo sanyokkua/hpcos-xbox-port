@@ -3,7 +3,7 @@
 
     python3 -I tools/kit.py <build dir> <kit dir>
 
-lift/     xboxrecomp's Python lifter (tools/ without outputs and tests, templates/), the engine's tools/regen.sh,
+lift/     xboxrecomp's Python lifter (tools/ without outputs and tests, templates/), the engine's tools/regen.sh and patch_gen.py,
           config/seed_functions.json and src/recomp_manual.c (regen reads it to skip the hand-written functions)
 py/       capstone (BSD) from .venv: the lifter runs on the Command Line Tools' /usr/bin/python3
 lib/      the runtime objects of hpcos_recomp (engine/src: the game's overrides and the Apple host) and the xboxrecomp static
@@ -30,7 +30,7 @@ for d in ('lift', 'py', 'lib'):
 ign = shutil.ignore_patterns('output', 'tests', 'conformance', '*.xbe', '__pycache__', '*.pyc', '.pytest_cache')
 shutil.copytree(os.path.join(UP, 'xboxrecomp', 'tools'), os.path.join(kit, 'lift', 'tools'), ignore=ign)
 shutil.copytree(os.path.join(UP, 'xboxrecomp', 'templates'), os.path.join(kit, 'lift', 'templates'), ignore=ign)
-for rel in ('tools/regen.sh', 'config/seed_functions.json', 'src/recomp_manual.c'):
+for rel in ('tools/regen.sh', 'tools/patch_gen.py', 'config/seed_functions.json', 'src/recomp_manual.c'):
     dst = os.path.join(kit, 'lift', 'com', rel)
     os.makedirs(os.path.dirname(dst), exist_ok=True)
     shutil.copy2(os.path.join(UP, rel), dst)
