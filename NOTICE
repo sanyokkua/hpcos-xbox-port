@@ -1,18 +1,23 @@
-Harry Potter Sorcerer's Stone for Mac
+Harry Potter Chamber of Secrets for Mac
 Copyright (C) 2026 Oleksandr Kostenko (sanyokkua) and contributors
 
 This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as
 published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. See LICENSE.
 
-This project is built on the engine of the NFS Underground 2 port (https://github.com/sanyokkua/nfsu2-xbox-port), which is
+This project is built on the tree of the Harry Potter and the Sorcerer's Stone port (https://github.com/sanyokkua/hp1-xbox-port),
+which is built on the engine of the NFS Underground 2 port (https://github.com/sanyokkua/nfsu2-xbox-port), which is
 nfsu2-sw by antoxa2584x (Anton Artemov, https://github.com/antoxa2584x/nfsu2-sw) with the Apple host and Metal renderer of
 nfsu2-ios by myUdav4iik (https://github.com/myUdav4iik/nfsu2-ios). Their files keep their authorship. How engine/ was made is
 in docs/upstream-patches/, and this project's later changes are in its git history. Anyone reusing this project's code: keep
 this credit, and the links to their projects, with it.
 
-The facts about this game (addresses, the controller, save signing, the logo movies) were found first by HP-PS-Xbox-Recomp by
-MiddleDucky (https://github.com/MiddleDucky/HP-PS-Xbox-Recomp, MIT, LICENSES/MIT-HP-PS-Xbox-Recomp.txt); the controller code
-and the logo skip in engine/src/recomp_manual.c follow its code and say so where they do.
+The facts about this game (the hidden functions and their seeds, the XInput function addresses, the video-overlay design for the
+movies, the logo skip, the file-cache race) were found first by HP-COS-Xbox-Recomp by MiddleDucky
+(https://github.com/MiddleDucky/HP-COS-Xbox-Recomp, MIT, LICENSES/MIT-HP-COS-Xbox-Recomp.txt). The cutscene fast-forward follows the
+design of HP2-Recompiled by Barthes-Recompiled (https://github.com/Barthes-Recompiled/HP2-Recompiled, a fork of HP-COS, MIT, same
+licence text). The controller's direct XInput design comes from HP-PS-Xbox-Recomp by MiddleDucky
+(https://github.com/MiddleDucky/HP-PS-Xbox-Recomp, MIT, LICENSES/MIT-HP-PS-Xbox-Recomp.txt). Code that follows them says so where
+it does, in engine/src/recomp_manual.c.
 The Metal renderer's effects, pacing and resolution changes come from NFSU2Deadware by LeoDeadware
 (https://github.com/LeoDeadware/NFSU2Deadware, MIT, LICENSES/MIT-NFSU2Deadware.txt); the installer's kit builder, build and
 import scripts adapt its tools (MIT). xboxrecomp by sp00nz is MIT (LICENSES/MIT-xboxrecomp.txt); its APU and NV2A parts from
@@ -22,6 +27,6 @@ of SpeedBreaker's by project(u) (GPL-3.0-or-later) and draws with Dear ImGui (MI
 (Apache-2.0, LICENSES/Apache-2.0-Roboto.txt). Third-party libraries: THIRD_PARTY_NOTICES.md.
 
 No game code or data is part of this project or its releases: the game is built on the player's Mac from their own disc.
-Harry Potter characters, names and related indicia are trademarks of and (C) Warner Bros. Entertainment Inc.; the game is
-published by Electronic Arts Inc. Xbox is a trademark of Microsoft. This is an unofficial fan project, not affiliated with or
-endorsed by Warner Bros., Electronic Arts or Microsoft.
+Harry Potter characters, names and related indicia are trademarks of and (C) Warner Bros. Entertainment Inc.; the game was
+developed by Eurocom and published by Electronic Arts Inc. Xbox is a trademark of Microsoft. This is an unofficial fan project,
+not affiliated with or endorsed by Warner Bros., Electronic Arts, Eurocom or Microsoft.

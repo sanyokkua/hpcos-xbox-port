@@ -1,13 +1,15 @@
 # Third-party notices
 
-Harry Potter Sorcerer's Stone for Mac (GPL-3.0-or-later, `LICENSE`) is built on the work below. The installer ships each one's
+Harry Potter Chamber of Secrets for Mac (GPL-3.0-or-later, `LICENSE`) is built on the work below. The installer ships each one's
 license text in `Contents/Resources/kit/licenses/`.
 
 | Project | What it gives | Where | License |
 |---|---|---|---|
-| [nfsu2-sw](https://github.com/antoxa2584x/nfsu2-sw) by antoxa2584x | the engine around xboxrecomp: lifter fixes, kernel and D3D glue, the host the game runs in | `engine/` (by way of nfsu2-ios and the NFS Underground 2 port) | no license file upstream; used here under this project's GPL-3.0-or-later, with credit (see `NOTICE`) |
+| [nfsu2-sw](https://github.com/antoxa2584x/nfsu2-sw) by antoxa2584x | the engine around xboxrecomp: lifter fixes, kernel and D3D glue, the host the game runs in | `engine/` (by way of nfsu2-ios, the NFS Underground 2 port and the Sorcerer's Stone port) | no license file upstream; used here under this project's GPL-3.0-or-later, with credit (see `NOTICE`) |
 | [nfsu2-ios](https://github.com/myUdav4iik/nfsu2-ios) by myUdav4iik | the Apple host and the Metal renderer (`nv2a_metal`) | `engine/` (from `85d2cbf`), the kit's objects | no license file upstream; as above |
-| [HP-PS-Xbox-Recomp](https://github.com/MiddleDucky/HP-PS-Xbox-Recomp) by MiddleDucky | this game's facts (addresses, the controller, the save signing, the logo movies, functions behind jump tables); the controller and logo-skip code | `engine/src/recomp_manual.c` (marked where it follows it) | MIT |
+| [HP-COS-Xbox-Recomp](https://github.com/MiddleDucky/HP-COS-Xbox-Recomp) by MiddleDucky (commit `f45cb33`) | this game's facts (177 hidden-function seeds, the XInput function addresses, the video-overlay design, the logo skip, the file-cache race); code that follows it | `engine/config/`, `engine/src/recomp_manual.c` (marked where it follows it), `engine/tools/patch_gen.py` | MIT |
+| [HP2-Recompiled](https://github.com/Barthes-Recompiled/HP2-Recompiled) by Barthes-Recompiled (a fork of HP-COS) | the cutscene fast-forward design | `engine/src/recomp_manual.c` | MIT |
+| [HP-PS-Xbox-Recomp](https://github.com/MiddleDucky/HP-PS-Xbox-Recomp) by MiddleDucky | the controller's direct XInput design and code | `engine/src/recomp_manual.c` (marked where it follows it) | MIT |
 | [xboxrecomp](https://github.com/sp00nznet/xboxrecomp) by sp00nz | the Xbox lifter (Python) and runtime: kernel, D3D8, NV2A, audio, input | the kit's `lift/` and libraries | MIT |
 | [xemu](https://github.com/xemu-project/xemu) | the APU (MCPX audio) and NV2A parts inside xboxrecomp | the kit's libraries (relinked on the player's Mac) | LGPL-2.1-or-later |
 | [NFSU2Deadware](https://github.com/LeoDeadware/NFSU2Deadware) by LeoDeadware | the Mac engine patches (render scale, Metal effects, mip chains, pacing), the kit builder, disc import, icon | `engine/` (via the NFS Underground 2 port), `tools/kit.py`, `mac/` | MIT |

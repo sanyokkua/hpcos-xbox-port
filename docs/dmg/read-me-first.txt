@@ -1,17 +1,17 @@
-Harry Potter Sorcerer's Stone for Mac
-=====================================
+Harry Potter Chamber of Secrets for Mac
+=======================================
 
 You need: an Apple Silicon Mac (M1 or newer) with macOS 15 or later, and your own disc image (.iso) of
-Harry Potter and the Sorcerer's Stone for the original Xbox, USA.
+Harry Potter and the Chamber of Secrets for the original Xbox, USA.
 
-1. Drag "Harry Potter Sorcerer's Stone Installer" to Applications and open it.
+1. Drag "Harry Potter Chamber of Secrets Installer" to Applications and open it.
    The first time, macOS blocks it (it isn't signed by Apple): open System Settings > Privacy & Security,
    scroll down and click "Open Anyway" next to the installer, then confirm.
 2. If macOS asks for Apple's Command Line Tools, click Install. The installer waits and goes on by itself.
-3. Choose your disc image. The installer copies the game's files (1.8 GB) to
-   ~/Library/Application Support/Harry Potter Sorcerer's Stone, translates the game's program to C and
+3. Choose your disc image. The installer copies the game's files (about 2.5 GB) to
+   ~/Library/Application Support/Harry Potter Chamber of Secrets, translates the game's program to C and
    compiles it on your Mac (a few minutes, once).
-4. "Harry Potter Sorcerer's Stone" is put in Applications and opens. Play it from there from now on.
+4. "Harry Potter Chamber of Secrets" is put in Applications and opens. Play it from there from now on.
    Settings menu: Back + Start on a controller, F1 (fn+F1 on a MacBook) or Cmd+,. Full screen on/off: F11.
 
-This DMG holds no game code and no game data. Details, credits and the source: https://github.com/sanyokkua/hp1-xbox-port
+This DMG holds no game code and no game data. Details, credits and the source: https://github.com/sanyokkua/hpcos-xbox-port
