@@ -3422,6 +3422,34 @@ static void mtl_draw_raw_inner(const Nv2aRawBatch *b)
                     memcpy(v, b->attr_const[k], sizeof v);
                 fprintf(stderr, " | a%u %.3g %.3g %.3g %.3g", k, v[0], v[1], v[2], v[3]);
             }
+            for (k = 4; k < 8; k++) {   /* hpcos-xbox-port: the other attributes' type/size/stride and vertex 0 */
+                if (b->attr_direct & (1u << k)) {
+                    float v[4];
+                    attr_to_float4(b, k, 0, v);
+                    fprintf(stderr, " | a%u t%u s%u st%u %.3g %.3g %.3g %.3g", k, b->direct[k].type, b->direct[k].size,
+                            b->direct[k].stride, v[0], v[1], v[2], v[3]);
+                } else if (b->attrs && (b->attr_present & (1u << k)))
+                    fprintf(stderr, " | a%u conv %.3g %.3g %.3g %.3g", k, b->attrs[k * 4], b->attrs[k * 4 + 1],
+                            b->attrs[k * 4 + 2], b->attrs[k * 4 + 3]);
+            }
+            if (getenv("RECOMP_DL_CONST") && b->vp_consts && (b->attr_direct & (getenv("RECOMP_DL_CONST")[0] == '2' ? 0x10 : 0x80)) && !(getenv("RECOMP_DL_CONST")[0] == '2' && (b->attr_direct & 0x80)) && (b->color_va & 0x0FFFFFFF) != 0x036D4000u) {
+                static int dumped;
+                if (dumped++ < 2) {
+                    uint32_t c;
+                    fprintf(stderr, "\n[dlc] constants:");
+                    for (c = 0; c < 192; c++)
+                        fprintf(stderr, "%s c%u %g %g %g %g", c % 4 ? "" : "\n[dlc]", c, b->vp_consts[c][0],
+                                b->vp_consts[c][1], b->vp_consts[c][2], b->vp_consts[c][3]);
+                    for (c = 0; c < 3 && c < b->vertex_count; c++) {
+                        uint32_t k2; fprintf(stderr, "\n[dlc] vertex %u:", c);
+                        for (k2 = 0; k2 < 16; k2++) if (b->attr_direct & (1u << k2)) { float v[4]; attr_to_float4(b, k2, c, v);
+                            fprintf(stderr, " v%u(%g %g %g %g)", k2, v[0], v[1], v[2], v[3]); }
+                    }
+                    fprintf(stderr, "\n");
+                }
+            }
+            if (b->vp_consts) fprintf(stderr, " | c58 %g %g c59 %g %g", b->vp_consts[58][0], b->vp_consts[58][1],
+                                      b->vp_consts[59][0], b->vp_consts[59][1]);
             fprintf(stderr, " | z %u %u %X", r[0x30C / 4], r[0x35C / 4], r[0x354 / 4]);
             if (getenv("RECOMP_DL_ALLVERTS") && b->vertex_count > 6 && !(r[(0x1B00 + 0x0C) / 4] & 0x40000000u)) {
                 for (k = 0; k < b->vertex_count; k++) {

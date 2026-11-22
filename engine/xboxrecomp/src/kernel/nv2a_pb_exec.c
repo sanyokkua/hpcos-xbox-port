@@ -617,6 +617,10 @@ static int vp_method(uint32_t method, uint32_t param)
     }
     if (method >= NV097_SET_TRANSFORM_CONSTANT && method < NV097_SET_TRANSFORM_CONSTANT + 0x80) {
         slot = (method - NV097_SET_TRANSFORM_CONSTANT) / 4;
+        if ((s_vp.const_load == 59 || s_vp.const_load == 58) && getenv("RECOMP_VPOFF_LOG")) {
+            static int n; float f; memcpy(&f, &param, 4);
+            if (n++ < 40) fprintf(stderr, "[vpoff] constant %u.%u = %g\n", s_vp.const_load, slot % 4, f);
+        }
         if (s_vp.const_load < VP_CONSTS)
             memcpy(&s_vp.c[s_vp.const_load][slot % 4], &param, 4);
         if (slot % 4 == 3)
@@ -633,6 +637,8 @@ static int vp_method(uint32_t method, uint32_t param)
      * so without this every 3D vertex landed in the top-left pixel. Not a
      * return: the methods keep their fixed-function meaning. */
     if (method >= 0x0A20 && method < 0x0A30) {
+        {   static int n; float f; memcpy(&f, &param, 4);
+            if (getenv("RECOMP_VPOFF_LOG") && n++ < 40) fprintf(stderr, "[vpoff] %X = %g\n", method, f); }
         memcpy(&s_vp.c[59][(method - 0x0A20) / 4], &param, 4);
         s_vp.gen++;
         s_vp.const_gen++;
@@ -4680,6 +4686,11 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
          && method <= NV097_SET_VIEWPORT_OFFSET_LAST) {
             memcpy(&s_gpu.vp_offset[(method - NV097_SET_VIEWPORT_OFFSET_FIRST) / 4],
                    &param, 4);
+            /* hpcos-xbox-port: and transform constant 59 (XFCTX_VPOFF), as the chip
+             * does; see vp_method. CoS's skinned characters read it. */
+            memcpy(&s_vp.c[59][(method - NV097_SET_VIEWPORT_OFFSET_FIRST) / 4], &param, 4);
+            s_vp.gen++;
+            s_vp.const_gen++;
             break;
         }
         if (method == NV097_SET_TRANSFORM_EXEC_MODE) {
