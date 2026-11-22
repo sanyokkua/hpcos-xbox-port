@@ -112,6 +112,8 @@ static void apply_fx(int c, int at_start)
 
 /* Tweaks */
 static void apply_skip_logos(int c, int at_start) { env("HPCOS_SKIP_LOGOS", c ? "1" : "0", at_start); }
+/* read by recomp_manual.c at every hold, so a change applies at once */
+static void apply_skip_cutscenes(int c, int at_start) { env("HPCOS_SKIP_CUTSCENES", c ? "1" : "0", at_start); }
 
 /* Advanced */
 static void apply_fps_counter(int c, int at_start)
@@ -161,9 +163,12 @@ static const OverlayOption k_options[] = {
       "The keyboard in the game (not in this menu): from the next start.",
       CHOICES(k_kbd), 0, 1, "keyboard", k_kbd_v, apply_kbd },
 
-    { "Tweaks", "Skip Logo Movies", "Start without the Warner Bros. and EA logo movies.",
+    { "Tweaks", "Skip Logo Movies", "Start without the EA and Warner Bros. logo movies.",
       "The logo movies before the title screen: from the next start.",
       CHOICES(k_onoff), 0, 1, "skip_logos", k_01, apply_skip_logos },
+    { "Tweaks", "Cutscene Fast-Forward", "Hold Start or Back for half a second in a cutscene: it plays "
+      "to its end about 8 times as fast, muted. Nothing is left out.", "Every cutscene: at once.",
+      CHOICES(k_onoff), 1, 0, "skip_cutscenes", k_01, apply_skip_cutscenes },
 
     { "Advanced", "Performance Overlay", "Frames per second and the slowest frame, top left "
       "(also Cmd+Option+F).", "Top left of the screen: at once.",

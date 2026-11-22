@@ -544,6 +544,57 @@ void sub_0017725D(void)
     esp += 4 + 8;
 }
 
+/* ── Skip Cutscenes (overlay: Tweaks, HPCOS_SKIP_CUTSCENES=1) ──────────────
+ * After MiddleDucky's HP2-Recompiled (MIT, port/src/hle_skip.c): holding Start
+ * or Back for half a second while a cutscene plays (the camera / control mode
+ * [0x50C2E4] is 7, set as a cutscene takes the camera) runs it to its own end
+ * 8x as fast: the vblank 8x (the title advances one fixed step a frame), one
+ * frame in 8 shown, the APU's clock 8x and the sound muted. Nothing is left
+ * out: scripts, speech and camera run as they would, only faster. It stops a
+ * moment after the camera mode leaves 7 (a cutscene in two parts goes on). */
+#define CAMERA_MODE 0x0050C2E4u
+extern volatile int xbox_vblank_turbo, nv2a_mtl_turbo;
+extern void xa2_set_mute(int on);
+static volatile int s_ff;
+static uint64_t ff_now_ms(void)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000u + (uint64_t)ts.tv_nsec / 1000000u;
+}
+static int ff_enabled(void)
+{
+    const char *e = getenv("HPCOS_SKIP_CUTSCENES");
+    return !(e && *e == '0');
+}
+static void ff_set(int on)
+{
+    if (s_ff == on) return;
+    s_ff = on;
+    xbox_vblank_turbo = on ? 8 : 1;
+    nv2a_mtl_turbo = on;
+    xa2_set_mute(on);
+    fprintf(stderr, "[skip] cutscene fast-forward %s\n", on ? "on" : "off");
+}
+static void cutscene_ff_pad(uint8_t buttons)
+{
+    static uint64_t held_since, out_since, ff_since;
+    uint64_t now = ff_now_ms();
+    int cut = MEM32(CAMERA_MODE) == 7u;
+    if (s_ff) {
+        if (cut) out_since = 0;
+        else if (!out_since) out_since = now;
+        if ((out_since && now - out_since > 1500) || now - ff_since > 180000)
+            ff_set(0);
+        return;
+    }
+    if (cut && ff_enabled() && (buttons & 0x30)) {
+        if (!held_since) held_since = now;
+        if (now - held_since >= 500) { ff_since = now; out_since = 0; held_since = 0; ff_set(1); }
+    } else
+        held_since = 0;
+}
+
 /* XInputGetState(hDevice, pState): dwPacketNumber, then XINPUT_GAMEPAD
  * { wButtons, bAnalogButtons[8], sThumbLX, LY, RX, RY } -- the USB report's
  * bytes 2..19 laid out the same way. The packet number moves only on a
@@ -555,6 +606,9 @@ void sub_0017743B(void)
     uint8_t rep[20];
     int i = xi_hle() ? xi_index(ARG(0)) : -2, k;
     if (i == -2) { sub_0017743B_gen(); return; }
+    if (i >= 0 && usb_gamepad_connected((int)s_xi[i].port)
+            && usb_gamepad_report((int)s_xi[i].port, rep, (int)sizeof rep) >= 20)
+        cutscene_ff_pad(rep[2]);
     if (i < 0) {
         eax = 6;
     } else if (!usb_gamepad_connected((int)s_xi[i].port)
@@ -1036,4 +1090,32 @@ void sub_001138B0(void)
                     MEM32(e+28), MEM32(e+32), MEM32(e+36), MEM32(e+40), MEM32(e+44));
         }
     }
+}
+
+/* ── Skip Logo Movies (overlay: Tweaks, HPCOS_SKIP_LOGOS=1) ─────────────────
+ * From HP-COS-Xbox-Recomp (MIT, tools/patch_gen.py + app.cpp hpcos_SkipMovie):
+ * the movie player sub_00018D40(name, skippable) is cdecl and no caller reads
+ * its result, so returning at once is the movie having ended. The boot plays
+ * warner.xmv and the language's ea_logo_*.xmv; the story intro stays. */
+extern void sub_00018D40_gen(void);
+void sub_00018D40(void)
+{
+    uint32_t name = MEM32(esp + 4u);
+    const char *n = name ? (const char *)XBOX_PTR(name) : NULL, *b;
+    const char *e = getenv("HPCOS_SKIP_LOGOS");
+    if (n) {
+        struct timespec ts;
+        clock_gettime(CLOCK_MONOTONIC, &ts);
+        fprintf(stderr, "[movie] %.3f s %s\n", ts.tv_sec + ts.tv_nsec / 1e9, n);
+        b = strrchr(n, '\\');
+        b = b ? b + 1 : n;
+        if (e && *e == '1' && (!strcasecmp(b, "warner.xmv") || !strncasecmp(b, "ea_logo_", 8)
+                               || !strcasecmp(b, "ealogo.xmv"))) {
+            fprintf(stderr, "[movie] skipped %s (Skip Logo Movies)\n", n);
+            eax = 0;
+            esp += 4;                           /* cdecl: only the return address */
+            return;
+        }
+    }
+    sub_00018D40_gen();
 }

@@ -492,7 +492,12 @@ static void throttle(MCPXAPUState *d)
             break;
         }
     }
-    d->next_frame_time_us += EP_FRAME_US;
+    {   /* hpcos-xbox-port: a fast-forward (xbox_vblank_turbo > 1) runs the APU's clock as fast,
+         * so speech and streamed music a cutscene waits for end in step */
+        extern volatile int xbox_vblank_turbo;
+        int t = xbox_vblank_turbo;
+        d->next_frame_time_us += t > 1 ? EP_FRAME_US / t : EP_FRAME_US;
+    }
 
     d->sleep_acc_us += (int)(qemu_clock_get_us(QEMU_CLOCK_REALTIME) - wait_start_us);
 }
