@@ -41,6 +41,12 @@ def main():
         shutil.rmtree(tmp, ignore_errors=True)
         print("import: default.xbe: %s" % msg, flush=True)
         return 3 if code == 2 else code
+    # The game's saves (UDATA) and title data (TDATA) live in this folder (the
+    # kernel maps Partition1\ here): a new import keeps them.
+    for keep in ("UDATA", "TDATA"):
+        old = os.path.join(dest, keep)
+        if os.path.isdir(old) and not os.path.exists(os.path.join(tmp, keep)):
+            os.rename(old, os.path.join(tmp, keep))
     shutil.rmtree(dest, ignore_errors=True)
     os.rename(tmp, dest)
     print("import: done, default.xbe: %s" % msg, flush=True)

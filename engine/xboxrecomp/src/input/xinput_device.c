@@ -443,6 +443,23 @@ DWORD xbox_InputGetState(DWORD dwPort, XBOX_INPUT_STATE *pState)
     }
     {   /* presses since the last read (latch_watch) */
         uint32_t l = __atomic_exchange_n(&g_latch[dwPort], 0u, __ATOMIC_RELAXED);
+        /* ...and each press stays down for at least RECOMP_PAD_MIN_READS reads (default 2,
+         * ~33 ms at the game's 60 reads/s): a tap that reached one read only could fall
+         * between two passes of a check that runs every other frame. */
+        {
+            static int min_reads = -1;
+            static uint32_t hold[XBOX_MAX_CONTROLLERS][4];
+            uint32_t now = l;
+            if (min_reads < 0) {
+                const char *e = getenv("RECOMP_PAD_MIN_READS");
+                min_reads = e ? atoi(e) : 2;
+                if (min_reads < 1) min_reads = 1;
+                if (min_reads > 5) min_reads = 5;
+            }
+            for (int k = 0; k < min_reads - 1; k++) l |= hold[dwPort][k];
+            for (int k = min_reads - 2; k > 0; k--) hold[dwPort][k] = hold[dwPort][k - 1];
+            if (min_reads > 1) hold[dwPort][0] = now;
+        }
         static const struct { int sdl; WORD dig; int ana; } m[] = {
             { SDL_CONTROLLER_BUTTON_A, 0, XBOX_BUTTON_A }, { SDL_CONTROLLER_BUTTON_B, 0, XBOX_BUTTON_B },
             { SDL_CONTROLLER_BUTTON_X, 0, XBOX_BUTTON_X }, { SDL_CONTROLLER_BUTTON_Y, 0, XBOX_BUTTON_Y },

@@ -624,6 +624,37 @@ static void dev_warp(void)
     fprintf(stderr, "[warp] level %d, start %d\n", level, start);
 }
 
+/* Dev: HPCOS_SAVE_NOW=<secs> asks for a save once, that long into play, as a SAVE GAME
+ * scroll does (its handler 0x54DB0 tail-jumps to sub_0004DD30: copy the game state into
+ * the slot, push the save-game mode). Tests the save screen and the write without
+ * walking to a scroll. */
+extern void sub_0004DD30(void);
+static void dev_save_now(void)
+{
+    static int done, secs = -2;
+    static uint64_t since;
+    if (done) return;
+    if (secs == -2) {
+        const char *e = getenv("HPCOS_SAVE_NOW");
+        secs = e && *e ? atoi(e) : -1;
+        if (secs < 0) { done = 1; return; }
+    }
+    {
+        uint32_t ent = MEM32(0x00530408u);
+        if (MEM32(CAMERA_MODE) != 0u || !ent || !MEM32(ent + 0xAC)) { since = 0; return; }
+    }
+    if (!since) { since = ff_now_ms(); return; }
+    if (ff_now_ms() - since < (uint64_t)secs * 1000u) return;
+    done = 1;
+    {
+        uint32_t s_esp = esp, s_ebx = ebx, s_esi = esi, s_edi = edi, s_ebp = g_ebp;
+        esp -= 4; MEM32(esp) = 0;               /* return address */
+        sub_0004DD30();
+        esp = s_esp; ebx = s_ebx; esi = s_esi; edi = s_edi; g_ebp = s_ebp;
+    }
+    fprintf(stderr, "[save] dev: save requested (slot %d)\n", (int)MEM32(0x0051DF64u));
+}
+
 /* Dev: Harry's update (sub_00053710, __thiscall: ecx = Harry, as HP-COS's trainer). His
  * object is [[0x530408] + 0xAC], his place at +0x14/+0x18/+0x1C. HPCOS_POS_LOG=1 logs it twice a second; HPCOS_TP=x,y,z
  * puts him there once, 2 s after a warp (or 6 s into play without one). */
@@ -689,6 +720,7 @@ static uint8_t cutscene_ff_pad(uint8_t buttons)
         }
     }
     dev_warp();
+    dev_save_now();
     {   /* Dev: HPCOS_PAUSE_OPTS=<mask> ORs the pause menu's debug rows into [0x527F26]
          * (0x200 the Level Selector, HP-COS) */
         static int m = -1;
@@ -1366,7 +1398,7 @@ extern void sub_000165A0_gen(void);
 void sub_000165A0(void) { if (loader_order_on()) loader_cb(0x00436F2Cu, 18, 0, 0); else sub_000165A0_gen(); }
 
 /* HPCOS_SAVE_LOG=1: the save checks -- free space for a save (sub_00016D40 -> 1 enough),
- * blocks short (sub_00018AD0(blocks needed) -> needed - free), saves found (sub_00018570). */
+ * blocks short (sub_00018AD0(blocks needed) -> needed - free), saves whose name is not POTTER A/B/C (sub_00018570: foreign saves, normally 0). */
 static int save_log(void)
 {
     static int on = -1;
@@ -1392,7 +1424,7 @@ void sub_00018570(void)
 {
     uint32_t ret = MEM32(esp);
     sub_00018570_gen();
-    if (save_log()) fprintf(stderr, "[save] saves found: %d (from %08X)\n", (int)eax, ret);
+    if (save_log()) fprintf(stderr, "[save] saves with other names: %d (from %08X)\n", (int)eax, ret);
 }
 
 /* The save slot [0x51DF64] (picked at New Game; -1: "started without the save option").

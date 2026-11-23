@@ -3704,6 +3704,15 @@ static void mtl_draw_raw_inner(const Nv2aRawBatch *b)
                 for (c = 0; c < 4; c++) {
                     uint32_t g = r[(0x3C0 + k * 16 + c * 4) / 4];
                     vb.tg[k][c] = (g == 0x2400 || g == 0x2401) ? (int32_t)g : 0;
+                    if (g && g != 0x2400 && g != 0x2401) {   /* sphere/normal/reflection map: not generated */
+                        static uint32_t seen[8]; static int ns;
+                        int s2, have = 0;
+                        for (s2 = 0; s2 < ns; s2++) have |= seen[s2] == (g | (uint32_t)k << 28);
+                        if (!have && ns < 8) {
+                            seen[ns++] = g | (uint32_t)k << 28;
+                            fprintf(stderr, "[mtl] texgen %X on stage %d coord %d not generated\n", g, k, c);
+                        }
+                    }
                 }
                 vb.tme[k] = r[(0x420 + k * 4) / 4] != 0;
                 if (vb.tme[k])

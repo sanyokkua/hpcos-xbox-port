@@ -34,5 +34,10 @@ far; not released.
 - Second play test: save scrolls could do nothing (the save slot reset after End Day; now kept, still to confirm); the
   boot / loading-screen stall's cause found and fixed (loader callbacks published their state before their result);
   left stick without a second dead zone, with range compensation.
-- Known limits: saving and loading are not tested (the game saves by itself at story points; the Burrow has none); only the
-  Burrow and the start of the next chapter have been played; 4:3 only (no widescreen); the PAL disc is not supported.
+- Third play test: saving works. A SAVE GAME scroll asks for a save through a function the lifter had missed (0x4DD30: it
+  copies the game state into the slot and opens the save screen); it was an empty stub, so the scroll did nothing. Now
+  lifted: a save is written (`game/UDATA/4541000e/…/POTTER A`) and Continue on the title loads it (tested: save in the
+  Burrow, Continue → "Potter A – The Burrow"). A new disc import keeps the saves. Every press reaches the game for at least
+  two reads (~33 ms; `RECOMP_PAD_MIN_READS`).
+- Known limits: only the Burrow, Diagon Alley and Borgin & Burkes have been played; a box in the alley behind Borgin &
+  Burkes would not move for the owner (not reproduced yet); 4:3 only (no widescreen); the PAL disc is not supported.

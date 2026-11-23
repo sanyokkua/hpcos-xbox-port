@@ -962,5 +962,9 @@
  {
   "start": "0x0011FC60",
   "note": "function after nop padding the scan missed (gap scan; EA audio/stream code near 0x11Cxxx-0x11Fxxx)"
+ },
+ {
+  "start": "0x0004DD30",
+  "note": "save request: copies the game state into the save slot and pushes the save-game mode (0x1E8058); called by the SAVE GAME scroll, missed by the lifter (no direct call, falls after data)"
  }
 ]

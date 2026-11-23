@@ -144,6 +144,18 @@ The owner played about 10 minutes from a recording and a log. What was wrong, an
 5. **Dev switches** for tests: `HPCOS_WARP=<level>[:start]` (the debug level selector's call; 4 Borgin & Burkes),
    `HPCOS_POS_LOG`, `HPCOS_TP="x,z;..."`, `HPCOS_PAUSE_OPTS` (the pause menu's debug rows), `HPCOS_SAVE_LOG`.
 
+## 3d. After the owner's third play test (2026-11-23)
+
+1. **Saves**: a SAVE GAME scroll ends in `sub_0004DD30` (copy the game state into the slot, open the save screen). The
+   lifter had missed it (no direct caller, it follows data) and `recomp_stubs_unresolved.c` held an empty stub, so the
+   scroll showed its tutorial and then did nothing. Seeded in `engine/config/seed_functions.json`. Tested by script:
+   `HPCOS_SAVE_NOW=4` in the Burrow writes `game/UDATA/4541000e/<id>/POTTER A`; the next run's title shows Continue →
+   "Potter A – The Burrow" and loads it. `mac/import_disc.py` keeps `UDATA`/`TDATA` across a new import.
+2. **Stub audit**: of the 46 stubs, only 0x4DD30 was a missed function (`tools/seedcheck.py` says "free"); the others are
+   reached from duplicate or misdecoded copies of functions.
+3. **Short presses**: each press reaches the game for at least two reads (`RECOMP_PAD_MIN_READS`, default 2).
+4. **Moving shadows**: not a texgen or AO bug as far as tests show (same picture with AO on and off); open.
+
 ## 4. Port features
 
 - **Settings menu** (the NFS ports' overlay): this game's rows in `engine/src/overlay/`. Pages: Display, Graphics, Audio, Input,
