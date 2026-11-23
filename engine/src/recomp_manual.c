@@ -592,6 +592,7 @@ static void ff_set(int on)
  * at 0x1E3DE8: 0 The Burrow, 4 Borgin & Burkes, 5 Diagon Alley, 30 Gryffindor Common
  * Room, ... (HP-COS's trainer.c). For tests only: no menu row. */
 extern void sub_0004AD50(void);
+static uint64_t s_warp_at;                  /* when dev_warp ran */
 static void dev_warp(void)
 {
     static int done, level = -2, start = -1;
@@ -603,7 +604,10 @@ static void dev_warp(void)
         if (e && strchr(e, ':')) start = atoi(strchr(e, ':') + 1);
         if (level < 0) { done = 1; return; }
     }
-    if (MEM32(CAMERA_MODE) != 0u) { since = 0; return; }
+    {
+        uint32_t ent = MEM32(0x00530408u);  /* in a level: Harry's entity exists */
+        if (MEM32(CAMERA_MODE) != 0u || !ent || !MEM32(ent + 0xAC)) { since = 0; return; }
+    }
     if (!since) { since = ff_now_ms(); return; }
     if (ff_now_ms() - since < 3000) return;
     done = 1;
@@ -616,7 +620,55 @@ static void dev_warp(void)
     }
     MEM16(0x00527DFCu) = (uint16_t)start;
     MEM32(0x001EF704u) = (uint32_t)start;
+    s_warp_at = ff_now_ms();
     fprintf(stderr, "[warp] level %d, start %d\n", level, start);
+}
+
+/* Dev: Harry's update (sub_00053710, __thiscall: ecx = Harry, as HP-COS's trainer). His
+ * object is [[0x530408] + 0xAC], his place at +0x14/+0x18/+0x1C. HPCOS_POS_LOG=1 logs it twice a second; HPCOS_TP=x,y,z
+ * puts him there once, 2 s after a warp (or 6 s into play without one). */
+static uint32_t s_harry;
+static uint64_t s_pad_t0;                   /* the first pad read: the pad script's clock */
+extern void sub_00053710_gen(void);
+void sub_00053710(void)
+{
+    static int log = -1, ntp = -1, itp;
+    static float tpv[32][2];
+    static uint64_t last, since;
+    {
+        uint32_t ent = MEM32(0x00530408u);      /* the player entity; its object at +0xAC (HP-COS) */
+        s_harry = ent ? MEM32(ent + 0xAC) : 0;
+    }
+    if (log < 0) { const char *e = getenv("HPCOS_POS_LOG"); log = e && *e == '1'; }
+    if (ntp < 0) {                              /* HPCOS_TP="x,z;x,z;..." */
+        const char *e = getenv("HPCOS_TP");
+        ntp = 0;
+        while (e && *e && ntp < 32 && sscanf(e, "%f,%f", &tpv[ntp][0], &tpv[ntp][1]) == 2) {
+            ntp++;
+            e = strchr(e, ';');
+            if (e) e++;
+        }
+    }
+    if (s_harry && (log || itp < ntp)) {
+        uint32_t o = s_harry;
+        uint64_t now = ff_now_ms();
+        if (log && now - last >= 500) {
+            last = now;
+            fprintf(stderr, "[pos] %.2f %.2f %.2f\n", MEMF(o + 0x14), MEMF(o + 0x18), MEMF(o + 0x1C));
+        }
+        if (itp < ntp) {
+            const char *w = getenv("HPCOS_WARP");
+            if (!since) {                       /* 20 s after the warp (or 3 s into play), then 1.5 s each */
+                if (!w) since = now + 3000;
+                else if (s_warp_at) since = s_warp_at + 20000;
+            } else if (now >= since + 1500u * (uint64_t)itp) {
+                MEMF(o + 0x14) = tpv[itp][0]; MEMF(o + 0x1C) = tpv[itp][1];
+                fprintf(stderr, "[tp] %d: %.2f %.2f at %.1f s\n", itp, tpv[itp][0], tpv[itp][1], (now - s_pad_t0) / 1000.0);
+                itp++;
+            }
+        }
+    }
+    sub_00053710_gen();
 }
 
 /* Port 0's buttons byte as read; returns the byte the game gets. */
@@ -627,6 +679,15 @@ static uint8_t cutscene_ff_pad(uint8_t buttons)
     static int log = -1;
     uint64_t now = ff_now_ms();
     uint8_t press = (uint8_t)(buttons & ~prev & 0x30);
+    if (!s_pad_t0) s_pad_t0 = now;
+    {
+        static uint32_t last_slot = 0x12345678u;
+        uint32_t sl = MEM32(0x0051DF64u);
+        if (sl != last_slot) {
+            fprintf(stderr, "[save] slot %d (camera mode %u)\n", (int)sl, MEM32(CAMERA_MODE));
+            last_slot = sl;
+        }
+    }
     dev_warp();
     {   /* Dev: HPCOS_PAUSE_OPTS=<mask> ORs the pause menu's debug rows into [0x527F26]
          * (0x200 the Level Selector, HP-COS) */
@@ -1303,6 +1364,57 @@ extern void sub_00016570_gen(void);
 void sub_00016570(void) { if (loader_order_on()) loader_cb(0x00436F2Cu, 17, 0x00436F5Cu, 0); else sub_00016570_gen(); }
 extern void sub_000165A0_gen(void);
 void sub_000165A0(void) { if (loader_order_on()) loader_cb(0x00436F2Cu, 18, 0, 0); else sub_000165A0_gen(); }
+
+/* HPCOS_SAVE_LOG=1: the save checks -- free space for a save (sub_00016D40 -> 1 enough),
+ * blocks short (sub_00018AD0(blocks needed) -> needed - free), saves found (sub_00018570). */
+static int save_log(void)
+{
+    static int on = -1;
+    if (on < 0) { const char *e = getenv("HPCOS_SAVE_LOG"); on = e && *e == '1'; }
+    return on;
+}
+extern void sub_00016D40_gen(void);
+void sub_00016D40(void)
+{
+    uint32_t ret = MEM32(esp);
+    sub_00016D40_gen();
+    if (save_log()) fprintf(stderr, "[save] enough space for a save? %d (from %08X)\n", (int)eax, ret);
+}
+extern void sub_00018AD0_gen(void);
+void sub_00018AD0(void)
+{
+    uint32_t ret = MEM32(esp), need = MEM32(esp + 4);
+    sub_00018AD0_gen();
+    if (save_log()) fprintf(stderr, "[save] blocks: need %u, short by %d (from %08X)\n", need, (int)eax, ret);
+}
+extern void sub_00018570_gen(void);
+void sub_00018570(void)
+{
+    uint32_t ret = MEM32(esp);
+    sub_00018570_gen();
+    if (save_log()) fprintf(stderr, "[save] saves found: %d (from %08X)\n", (int)eax, ret);
+}
+
+/* The save slot [0x51DF64] (picked at New Game; -1: "started without the save option").
+ * A save scroll does nothing while it is -1 (0x80EB0). The game systems' init
+ * (sub_0004ABF0, from the game mode's init 0x34D00) sets it to -1 with the rest. In
+ * play it is kept: the owner's game, after the Burrow's End Day, had saving off and
+ * its scrolls did nothing. HPCOS_KEEP_SLOT=0: the title's way. Every change of the
+ * slot is logged ([save] slot). */
+extern void sub_0004ABF0_gen(void);
+void sub_0004ABF0(void)
+{
+    static int keep = -1;
+    uint32_t slot = MEM32(0x0051DF64u), ent = MEM32(0x00530408u);
+    if (keep < 0) { const char *e = getenv("HPCOS_KEEP_SLOT"); keep = !(e && *e == '0'); }
+    sub_0004ABF0_gen();
+    fprintf(stderr, "[save] game systems init: slot %d -> %d (in play: %d)\n", (int)slot,
+            (int)MEM32(0x0051DF64u), ent && MEM32(ent + 0xAC) ? 1 : 0);
+    if (keep && slot != 0xFFFFFFFFu && ent && MEM32(ent + 0xAC)) {
+        MEM32(0x0051DF64u) = slot;
+        fprintf(stderr, "[save] slot %d kept\n", (int)slot);
+    }
+}
 
 static void fc_owner_moves_on(void)
 {

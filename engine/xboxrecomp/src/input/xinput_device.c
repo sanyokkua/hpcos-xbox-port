@@ -429,10 +429,14 @@ DWORD xbox_InputGetState(DWORD dwPort, XBOX_INPUT_STATE *pState)
     pState->Gamepad.sThumbRX = SDL_GameControllerGetAxis(c, SDL_CONTROLLER_AXIS_RIGHTX);
     pState->Gamepad.sThumbRY =
         (SHORT)(-1 - SDL_GameControllerGetAxis(c, SDL_CONTROLLER_AXIS_RIGHTY));
-    {   /* Pads rest off centre: a radial dead zone (stick_deadzone.h). */
+    {   /* Pads rest off centre: a radial dead zone (stick_deadzone.h) on the right stick.
+         * hpcos-xbox-port: the left stick (Harry) has the title's own dead zone (0.35)
+         * and run threshold; a second one on top made small pushes dead and then jump.
+         * Instead, HP-COS-Xbox-Recomp's range compensation: a push to 65 % counts as full
+         * (RECOMP_STICK_RANGE, 1 = off), so pads with a short range still run. */
         int16_t lx = pState->Gamepad.sThumbLX, ly = pState->Gamepad.sThumbLY;
         int16_t rx = pState->Gamepad.sThumbRX, ry = pState->Gamepad.sThumbRY;
-        stick_deadzone(&lx, &ly, STICK_DEADZONE);
+        stick_range(&lx, &ly);
         stick_deadzone(&rx, &ry, STICK_DEADZONE);
         pState->Gamepad.sThumbLX = lx; pState->Gamepad.sThumbLY = ly;
         pState->Gamepad.sThumbRX = rx; pState->Gamepad.sThumbRY = ry;
