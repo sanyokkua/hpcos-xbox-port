@@ -166,8 +166,8 @@ static const OverlayOption k_options[] = {
     { "Tweaks", "Skip Logo Movies", "Start without the EA and Warner Bros. logo movies.",
       "The logo movies before the title screen: from the next start.",
       CHOICES(k_onoff), 0, 1, "skip_logos", k_01, apply_skip_logos },
-    { "Tweaks", "Skip Cutscenes", "Press Start or Back in a cutscene: it runs to its end as fast as the "
-      "Mac can (about 2.5x), muted, the picture updated 4 times a second. The story is not cut.",
+    { "Tweaks", "Skip Cutscenes", "Press Start or Back in a cutscene: it runs to its end in a few seconds "
+      "(about 30x, muted, the picture updated 4 times a second). The story is not cut.",
       "Every cutscene: at once.",
       CHOICES(k_onoff), 1, 0, "skip_cutscenes", k_01, apply_skip_cutscenes },
 

@@ -95,13 +95,16 @@ The owner played about 10 minutes from a recording and a log. What was wrong, an
    the tile's opposite (dark) edge. A screen quad (no depth test, 3-6 vertices) whose texture coordinates span [0, 1] samples
    stage 0 clamped to its edge (`RECOMP_MTL_QUADCLAMP=0` off; HP-COS holds them half a texel inside).
 4. **Cutscenes were not skipped**: the hold-for-half-a-second design was missed in play (13 Start presses, none held). Now one
-   press of Start or Back in a cutscene (camera mode `[0x50C2E4]` 7) starts it, and that press is hidden from the game. The
-   vblank speed-up alone gave only 1.3x: each frame's ~14 NOP-trap callbacks and its flip stall are handshakes with the guest
-   driver, and the GPU still drew every frame. Now the GPU draws and shows a frame about every 250 ms (only one with its 3D
-   pass) and the vblank runs 6x: about 2.4x real (130-180 game frames a second), the intro's last 56 s in 23 s. Faster vblanks
-   (10x+) starve the timer thread (4 fps). HP2-Recompiled also leaves out `sub_00032980`; here that gained nothing, and its
-   caller `sub_00032B70` loops until it returns 0 (left out without eax = 0, a hang). A next part that starts within 2.5 s
-   goes on fast too.
+   press of Start or Back in a cutscene (camera mode `[0x50C2E4]` 7) starts it, and that press is hidden from the game. Speed
+   (owner's second test: "FPS drops to 4 and it doesn't skip"): the vblank speed-up alone gave 1.3x, and drawing only every
+   250 ms on the GPU 2.4x. A sample showed why: 93 % of the game thread in the world render `sub_00035190` waiting on the GPU
+   (push-buffer and vertex-buffer space, `BlockOnTime`), and Swap `sub_00134D70` waits for the previous frame and the vblank.
+   The frame loop (0x13170) is logic (`sub_00035110`), render, Swap; while skipping, the render's scene draw (its virtual
+   call; its prep `sub_00038C80` and counters stay) and Swap are made only every 250 ms. A pass is then the logic alone:
+   1,500-2,400 passes a second, the intro's remaining minute in about 2 s, the same state after it as without the skip. It
+   stops at the first pass out of mode 7 (any grace would be seconds of fast gameplay) and goes on into a next part that
+   starts within 2.5 s. The vblank and APU run 6x (10x+ starves the timer thread). HP2-Recompiled leaves out `sub_00032980`;
+   its caller `sub_00032B70` loops until it returns 0.
 5. **Controller**: LB / RB were Black / White; the Controller S has White on the left: LB is White, RB is Black now (xemu,
    HP-COS). "Presses ignored now and then": a press that begins and ends between two reads of the game (a slow frame, a load)
    was lost. The controller events now latch presses until the next read (`RECOMP_PAD_LATCH=0` off). The play-test log has
@@ -126,7 +129,7 @@ The owner played about 10 minutes from a recording and a log. What was wrong, an
   Tweaks, Advanced.
 - **Skip Logo Movies** (the logo skip of HP-COS): off by default.
 - **Skip Cutscenes** (the design of HP2-Recompiled): on by default. Press Start or Back in a cutscene and it runs to its end
-  as fast as the runtime can (about 2.4x), muted, the picture updated 4 times a second. Nothing is left out. See 3b, item 4.
+  in a few seconds (about 30x), muted, the picture updated 4 times a second. Nothing is left out. See 3b, item 4.
 - **Controller:** XInput functions at the addresses from HP-COS, with the direct design of HP-PS-Xbox-Recomp, fed from the
   runtime's pad report (so the keyboard, scripted input and the menu's neutral pad still apply). A radial stick dead zone
   (`engine/xboxrecomp/src/input/stick_deadzone.h`).

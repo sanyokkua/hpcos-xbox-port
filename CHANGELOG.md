@@ -19,7 +19,7 @@ far; not released.
   (24 fps to 60 fps); movie sound read from the right memory (the PCM movies screeched); a hold in the file cache that makes a load hang rare; one function patched after every lift.
 - In-game settings menu (Back + Start, F1 or Cmd+,): Display, Graphics (anti-aliasing, anisotropic filtering, bloom and ambient
   occlusion, gamma), Audio, Input (vibration, keyboard), Tweaks and Advanced. Tweaks: Skip Logo Movies, Skip Cutscenes
-  (press Start or Back in a cutscene: it runs to its end about 2.4x as fast, muted, nothing left out).
+  (press Start or Back in a cutscene: it runs to its end in a few seconds, about 30x, muted, nothing left out).
 - Controller with rumble and keyboard, through XInput functions after HP-PS-Xbox-Recomp; a radial dead zone on the sticks.
 - Everything the port is built from is in the repository (`engine/`): no download at build time.
 - The app keeps everything in `~/Library/Application Support/Harry Potter Chamber of Secrets`; logs in `logs/`.
@@ -28,7 +28,7 @@ far; not released.
   `tests/dmg_no_game_code.sh` passes (2,263 disc files, 64 code windows).
 - After the owner's first play test (2026-11-23): W-buffer depth (windows no longer flicker against their walls); ambient
   occlusion reads it as linear depth (no more haze over the sky, no dark halos sliding along walls); no line through the
-  title picture; Skip Cutscenes on a single press and faster; LB / RB are White / Black (were swapped); short presses are no
+  title picture; Skip Cutscenes on a single press and about 30x (was 8x on paper, ~1.3x in practice); LB / RB are White / Black (were swapped); short presses are no
   longer lost; a crash at boot (a GPU callback overwritten before it ran) and the "disc is dirty" screen after skipping the intro
   fixed; load stalls rarer (1 boot in 36 in tests, open).
 - Known limits: saving and loading are not tested (the game saves by itself at story points; the Burrow has none); only the

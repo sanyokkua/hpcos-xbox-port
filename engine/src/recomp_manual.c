@@ -548,19 +548,17 @@ void sub_0017725D(void)
  * After MiddleDucky's HP2-Recompiled (MIT, port/src/hle_skip.c): pressing Start
  * or Back while a cutscene plays (the camera / control mode [0x50C2E4] is 7,
  * set as a cutscene takes the camera) runs it to its own end as fast as the
- * runtime can: the vblank FF_SCALE x (the title advances one fixed step a
- * frame), the GPU draws and shows a frame about every 250 ms only, the APU's
- * clock as fast and the sound muted. Nothing is left out of the story:
+ * CPU allows (~30x): the title's frame loop renders and swaps only every
+ * 250 ms (sub_00035190 / sub_00134D70 below), the vblank and the APU's clock
+ * run FF_SCALE x, the sound is muted. Nothing is left out of the story:
  * scripts, speech and camera run as they would, only faster, so whatever the
- * cutscene sets up is set up. It stops a moment after the camera mode leaves 7
- * and goes on by itself into a next part that starts within 2.5 s. The press
- * that starts it is not passed to the game. HPCOS_FF_LOG=1 logs every
- * Start/Back press with the camera mode, and the game's frames a second.
- * (HP2-Recompiled also leaves out sub_00032980; here that gained nothing, and
- * sub_00032B70 loops until it returns 0.) */
+ * cutscene sets up is set up. It stops at the first pass out of mode 7 and goes
+ * on by itself into a next part that starts within 2.5 s. The press that
+ * starts it is not passed to the game. HPCOS_FF_LOG=1 logs every Start/Back
+ * press with the camera mode, and the passes a second. (HP2-Recompiled leaves
+ * out sub_00032980; its caller sub_00032B70 loops until it returns 0.) */
 #define CAMERA_MODE 0x0050C2E4u
-#define FF_SCALE 6       /* the vblank's speed-up: about 2.5x real (the GPU handshakes cap it at ~140 fps;
-                           * above ~10x the timer thread starves the game) */
+#define FF_SCALE 6       /* the vblank's and the APU's speed-up (above ~10x the timer thread starves the game) */
 extern volatile int xbox_vblank_turbo, nv2a_mtl_turbo;
 extern void xa2_set_mute(int on);
 static volatile int s_ff;
@@ -591,7 +589,7 @@ static void ff_set(int on)
 /* Port 0's buttons byte as read; returns the byte the game gets. */
 static uint8_t cutscene_ff_pad(uint8_t buttons)
 {
-    static uint64_t out_since, ff_since, ended;
+    static uint64_t ff_since, ended;
     static uint8_t prev, hidden;
     static int log = -1;
     uint64_t now = ff_now_ms();
@@ -611,24 +609,74 @@ static uint8_t cutscene_ff_pad(uint8_t buttons)
         fprintf(stderr, "[skip] %s pressed, camera mode %u\n", press & 0x10 ? "Start" : "Back", MEM32(CAMERA_MODE));
     hidden &= buttons;                  /* a hidden press stays hidden until released */
     if (s_ff) {
-        if (cut) out_since = 0;
-        else if (!out_since) out_since = now;
-        if ((out_since && now - out_since > 1500) || now - ff_since > 180000) {
-            ended = out_since ? now : 0;
+        /* stop at the first pass out of the cutscene: at ~30x even a second of grace would be
+         * half a minute of the game played fast */
+        if (!cut || now - ff_since > 180000) {
+            ended = !cut ? now : 0;
             ff_set(0);
         }
     } else if (cut && ended && now - ended < 2500 && ff_enabled()) {
         ended = 0;                      /* the next part of a cutscene in two goes on fast too */
         ff_since = now;
-        out_since = 0;
         ff_set(1);
     } else if (cut && press && ff_enabled()) {
         ff_since = now;
-        out_since = 0;
         hidden |= press;
         ff_set(1);
     }
     return (uint8_t)(buttons & ~hidden);
+}
+
+/* While a cutscene is skipped the title's frame loop (0x13170: logic, then the world's
+ * render sub_00035190, then D3DDevice_Swap sub_00134D70) renders and swaps only about
+ * every 250 ms. The render waits on the GPU for push-buffer and vertex-buffer space and
+ * Swap on the previous frame and the vblank: ~7 ms of GPU handshakes a pass, which kept
+ * the fast-forward at ~2.4x. Left out, a pass is the logic alone (one fixed step), so
+ * the cutscene runs as fast as the CPU allows. The render's own bookkeeping stays:
+ * its prep (sub_00038C80) and its counters; only the scene's draw (a virtual call) is
+ * left out. HPCOS_FF_RENDER_MS=0: every pass renders and swaps. */
+static int s_ff_swap;                       /* this pass rendered: its Swap is made */
+static void ff_call(void (*fn)(void), uint32_t ret_va)
+{
+    esp -= 4;
+    MEM32(esp) = ret_va;                    /* as the title's call: a return address */
+    fn();                                   /* cdecl, no arguments: pops the return address */
+}
+extern void sub_00035190_gen(void);
+extern void sub_00038C80(void);
+void sub_00035190(void)
+{
+    static int ms = -1;
+    static uint64_t last;
+    if (ms < 0) { const char *e = getenv("HPCOS_FF_RENDER_MS"); ms = e ? atoi(e) : 250; }
+    if (s_ff && ms > 0) {
+        uint64_t now = ff_now_ms();
+        if (now - last < (uint64_t)ms) {
+            MEM32(0x0051DEA4u) = 2;
+            ff_call(sub_00038C80, 0x000351ABu);
+            MEM32(0x0051DEA8u) += 1;
+            MEM32(0x0050C350u) = 0;
+            s_ff_swap = 0;
+            esp += 4;                       /* ret */
+            return;
+        }
+        last = now;
+    }
+    s_ff_swap = 1;
+    sub_00035190_gen();
+}
+
+/* D3DDevice_Swap (sub_00134D70, stdcall(flags), returns the swap count): made only
+ * after a pass that rendered (above) while skipping. */
+extern void sub_00134D70_gen(void);
+void sub_00134D70(void)
+{
+    if (s_ff && !s_ff_swap) {
+        eax = MEM32(MEM32(0x00140888u) + 0x2010);    /* the device's swap count, as Swap returns */
+        esp += 4 + 4;                                /* ret 4 */
+        return;
+    }
+    sub_00134D70_gen();
 }
 
 /* XInputGetState(hDevice, pState): dwPacketNumber, then XINPUT_GAMEPAD

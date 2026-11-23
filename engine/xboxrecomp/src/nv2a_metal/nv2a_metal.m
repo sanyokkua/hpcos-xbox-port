@@ -3396,8 +3396,7 @@ extern volatile int nv2a_mtl_turbo;
 /* fast-forward: 1 draws 1 frame in 8 (HP1); 2 draws every frame and shows only frames with depth-tested
  * draws (hpcos: the title itself leaves its 3D pass out of the others) */
 static uint32_t s_ff_zdraws;
-static int s_ff_show = 1;           /* turbo 2: this frame is drawn (one shown about every 250 ms) */
-#define TURBO_SKIP() ((nv2a_mtl_turbo == 1 && (s_frame % 8u) != 0u) || (nv2a_mtl_turbo == 2 && !s_ff_show))
+#define TURBO_SKIP() (nv2a_mtl_turbo == 1 && (s_frame % 8u) != 0u)
 static void mtl_draw_raw_inner(const Nv2aRawBatch *b)
 {
     MtSurf *s, *sampled[4];
@@ -4467,22 +4466,10 @@ static void mtl_flip_inner(void)
     VT("flip %u: surface %08X drew %d\n", s_frame, s ? s->va : 0, s_drew_any);
     s_end_depth_dc = 1;
     if (nv2a_mtl_turbo == 2) {
-        /* fast-forward: a frame is drawn and shown about every 250 ms -- the first one, from then, that
-         * drew its 3D scene (the title leaves its 3D pass out of most frames); the rest are not drawn */
-        static uint64_t last;
-        struct timespec ts;
-        uint64_t now;
-        clock_gettime(CLOCK_MONOTONIC, &ts);
-        now = (uint64_t)ts.tv_sec * 1000u + (uint64_t)ts.tv_nsec / 1000000u;
-        if (s_ff_show && s_ff_zdraws > 0) {
-            if (!s_headless)
-                present(s);
-            s_ff_show = 0;
-            last = now;
-        } else if (!s_ff_show && now - last >= 250)
-            s_ff_show = 1;
-    } else {
-        s_ff_show = 1;
+        /* the cutscene skip: the title renders and swaps only every 250 ms (recomp_manual.c); a
+         * frame that drew its 3D scene is shown */
+        if (s_ff_zdraws > 0 && !s_headless)
+            present(s);    } else {
         if (!s_headless && (!nv2a_mtl_turbo || s_frame % 8 == 1))
             present(s);             /* HP1's fast-forward: the one frame in 8 drawn is shown */
     }

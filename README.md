@@ -113,7 +113,7 @@ and, after a change, whether it was applied at once or needs a restart. At the b
 | Input | Vibration | Off, 10-100% (100% default) | at once |
 | | Keyboard as Controller | Without a controller (default), Always, Off | after a restart |
 | Tweaks | Skip Logo Movies | Off (default), On: no Warner Bros. and EA logos at the start | at the next start |
-| | Skip Cutscenes | On (default), Off: press **Start** or **Back** in a cutscene and it runs to its end as fast as the Mac can (about 2.5x; the picture updates 4 times a second, the sound is muted). Nothing is cut from the story, so whatever the cutscene sets up is set up. A cutscene in two parts goes on into the second | at once |
+| | Skip Cutscenes | On (default), Off: press **Start** or **Back** in a cutscene and it runs to its end in a few seconds (about 30x; the picture updates 4 times a second, so a frame counter shows 4, and the sound is muted). Nothing is cut from the story, so whatever the cutscene sets up is set up. A cutscene in two parts goes on into the second | at once |
 | Advanced | Performance Overlay | frames per second and the slowest frame, top left | at once (also **Cmd+Option+F**) |
 | | Logs | opens the logs folder in Finder | |
 
