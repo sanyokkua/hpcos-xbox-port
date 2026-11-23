@@ -1656,6 +1656,40 @@ volatile int nv2a_mtl_capture;   /* hp1-xbox-port: F12 capture (apple_main.c): f
 volatile int nv2a_mtl_capture_frames = 1;
 static int capturing(void) { return nv2a_mtl_capture >= 1 && nv2a_mtl_capture <= nv2a_mtl_capture_frames; }
 static uint32_t s_nomip_draws, s_onelvl_draws, s_stage_draws;   /* stage binds at the title's no-mip level 0 (NFSU2_TEXFLIP log) */
+/* hpcos-xbox-port (owner 2026-11-23: a line through the title picture): a 2D picture drawn as tiles
+ * with WRAP addressing, the tiles overlapping by half a console pixel. Upscaled, the overlap's
+ * sub-pixels sample just past u = 1, which the bilinear filter blends with the tile's opposite
+ * (dark) edge. A screen quad (no depth test, at most 6 vertices) whose texture coordinates span
+ * [0, 1] samples stage 0 clamped to its edge instead (HP-COS's seam fix keeps them half a texel
+ * inside). RECOMP_MTL_QUADCLAMP=0 off. */
+static int s_quad_clamp;
+static int quad_uv01(const Nv2aRawBatch *b, const uint32_t *r)
+{
+    static int on = -1;
+    uint32_t k, v;
+    if (on < 0) { const char *e = getenv("RECOMP_MTL_QUADCLAMP"); on = !(e && *e == '0'); }
+    if (!on || r[0x30C / 4] || b->vertex_count < 3 || b->vertex_count > 6)
+        return 0;
+    for (k = 1; k < NV2A_RAW_ATTRS; k++) {
+        float lo = 1e9f, hi = -1e9f;
+        int ok = 1;
+        if (!(b->attr_direct & (1u << k)) || b->direct[k].type != 2 || b->direct[k].size != 2 || !b->direct[k].ptr)
+            continue;
+        for (v = 0; v < b->vertex_count && ok; v++) {
+            float uv[2];
+            memcpy(uv, b->direct[k].ptr + v * b->direct[k].stride, sizeof uv);
+            for (int c = 0; c < 2; c++) {
+                if (!(uv[c] >= -0.001f && uv[c] <= 1.001f)) ok = 0;
+                if (uv[c] < lo) lo = uv[c];
+                if (uv[c] > hi) hi = uv[c];
+            }
+        }
+        if (ok && hi - lo > 0.5f)
+            return 1;
+    }
+    return 0;
+}
+
 static void bind_stage(const uint32_t *regs, int i, float scale[2], __strong id<MTLTexture> *tex_out,
                        __strong id<MTLSamplerState> *smp_out, MtSurf **sampled)
 {
@@ -1774,6 +1808,8 @@ static void bind_stage(const uint32_t *regs, int i, float scale[2], __strong id<
         if (an > 16) an = 16;
         if (an > 1) key |= (uint32_t)an << 20;
     }
+    if (s_quad_clamp && i == 0 && (key & 0xF) == 1 && ((key >> 8) & 0xF) == 1)
+        key = (key & ~0xF0Fu) | 0x303u;         /* wrap -> clamp to edge (quad_uv01) */
     *smp_out = sampler_get(key);
     {   /* hp1-xbox-port: RECOMP_STAGE_TRACE=<frame>: every stage bind of that frame. */
         static int tf = -2;
@@ -1879,8 +1915,8 @@ static id<MTLTexture> feedback_copy(MtSurf *s)
 typedef struct {
     uint64_t   vkey;
     Nv2aPshKey pkey;
-    __strong id<MTLLibrary> vlib;
-    __strong id<MTLFunction> vs, vsp, fs;     /* vsp: points variant, made on demand */
+    __strong id<MTLLibrary> vlib, flib;
+    __strong id<MTLFunction> vs, vsp, fs, fsw; /* vsp: points variant, fsw: W-buffer depth; on demand */
     uint32_t   used;
     uint32_t   hash;
     int        next;
@@ -1925,16 +1961,21 @@ static id<MTLLibrary> compile(const char *src, const char *what)
     return lib;
 }
 
-static id<MTLFunction> function(id<MTLLibrary> lib, const char *name, BOOL points)
+static id<MTLFunction> function_w(id<MTLLibrary> lib, const char *name, BOOL points, BOOL wdepth)
 {
     MTLFunctionConstantValues *cv = [MTLFunctionConstantValues new];
     NSError *err = nil;
     id<MTLFunction> fn;
     [cv setConstantValue:&points type:MTLDataTypeBool atIndex:NV2A_MSL_FC_POINTS];
+    [cv setConstantValue:&wdepth type:MTLDataTypeBool atIndex:NV2A_MSL_FC_WDEPTH];
     fn = [lib newFunctionWithName:[NSString stringWithUTF8String:name] constantValues:cv error:&err];
     if (!fn)
         LOGE("function %s: %s\n", name, err.localizedDescription.UTF8String);
     return fn;
+}
+static id<MTLFunction> function(id<MTLLibrary> lib, const char *name, BOOL points)
+{
+    return function_w(lib, name, points, NO);
 }
 
 static uint64_t prog_hash(const Nv2aRawBatch *b)
@@ -2080,8 +2121,8 @@ static MtProg *prog_get(const Nv2aRawBatch *b, const Nv2aPshKey *pk)
         pipes_forget_prog((int)(p - s_prog));
         s_prog_live--;
     }
-    p->vlib = nil;
-    p->vs = p->vsp = p->fs = nil;
+    p->vlib = p->flib = nil;
+    p->vs = p->vsp = p->fs = p->fsw = nil;
 
     if (nv2a_msl_vertex(vkey ? b->vp_program : NULL, b->vp_slots, b->vp_start, vsrc, sizeof vsrc) < 0
      || nv2a_msl_fragment(pk, fsrc, sizeof fsrc) < 0) {
@@ -2108,6 +2149,7 @@ static MtProg *prog_get(const Nv2aRawBatch *b, const Nv2aPshKey *pk)
         return NULL;
     }
     p->vlib = vl;
+    p->flib = fl;
     s_prog_live++;
     if ((++s_prog_made % 100) == 0)
         LOGE("%u shader programs compiled (%u live)\n", s_prog_made, s_prog_live);
@@ -2124,6 +2166,14 @@ static MtProg *prog_get(const Nv2aRawBatch *b, const Nv2aPshKey *pk)
     return p;
 }
 
+/* The W-buffer variant of a program's fragment function (writes depth = w). */
+static id<MTLFunction> prog_fs_w(MtProg *p)
+{
+    if (!p->fsw && p->flib)
+        p->fsw = function_w(p->flib, NV2A_MSL_FS_NAME, NO, YES);
+    return p->fsw;
+}
+
 /* The points variant of a program's vertex function (writes point_size). */
 static id<MTLFunction> prog_vs_points(MtProg *p)
 {
@@ -2138,7 +2188,7 @@ static id<MTLFunction> prog_vs_points(MtProg *p)
 
 typedef struct {
     int      prog;
-    uint32_t blend, bsrc, bdst, beq, cmask, depth, points;
+    uint32_t blend, bsrc, bdst, beq, cmask, depth, points, wdepth;
     uint32_t vfmt[NV2A_RAW_ATTRS];
     uint32_t vstride[NV2A_RAW_ATTRS];   /* s_static_stride only, else 0 */
 } PipeKey;
@@ -2268,7 +2318,9 @@ static MTLRenderPipelineDescriptor *pipe_desc(const PipeKey *k)
         return nil;
     d = [MTLRenderPipelineDescriptor new];
     d.vertexFunction = vs;
-    d.fragmentFunction = p->fs;
+    d.fragmentFunction = k->wdepth ? prog_fs_w(p) : p->fs;
+    if (!d.fragmentFunction)
+        return nil;
     vd = [MTLVertexDescriptor vertexDescriptor];
     for (i = 0; i < NV2A_RAW_ATTRS; i++) {
         vd.attributes[i].format = (MTLVertexFormat)(k->vfmt[i] & 0xFFFF);
@@ -2492,6 +2544,7 @@ static void prewarm(void)
             bad ? " (a file ends in a bad record)" : "");
 }
 
+static int s_frame_wdepth;          /* this frame drew with the W-buffer (the post effects read it) */
 #include "nv2a_metal_post.inc"
 extern volatile int nv2a_mtl_blur_off;   /* below: the overlay's Motion Blur row */
 
@@ -2767,7 +2820,7 @@ typedef struct {
 } DynState;
 static DynState s_dyn;
 static uint32_t zmax_of(const uint32_t *r);
-static int s_zb_seen;
+static int s_zb_seen, s_wd_seen;
 
 /* Returns 0 when the draw shows nothing (front-and-back culled triangles:
  * Metal has no such cull mode). */
@@ -3340,7 +3393,11 @@ static int pend_append(const Nv2aRawBatch *b, int changed)
 /* ── Back end entry points ────────────────────────────────────────── */
 
 extern volatile int nv2a_mtl_turbo;
-#define TURBO_SKIP() (nv2a_mtl_turbo && (s_frame % 8u) != 0u)   /* fast-forward: draw 1 frame in 8 */
+/* fast-forward: 1 draws 1 frame in 8 (HP1); 2 draws every frame and shows only frames with depth-tested
+ * draws (hpcos: the title itself leaves its 3D pass out of the others) */
+static uint32_t s_ff_zdraws;
+static int s_ff_show = 1;           /* turbo 2: this frame is drawn (one shown about every 250 ms) */
+#define TURBO_SKIP() ((nv2a_mtl_turbo == 1 && (s_frame % 8u) != 0u) || (nv2a_mtl_turbo == 2 && !s_ff_show))
 static void mtl_draw_raw_inner(const Nv2aRawBatch *b)
 {
     MtSurf *s, *sampled[4];
@@ -3373,6 +3430,8 @@ static void mtl_draw_raw_inner(const Nv2aRawBatch *b)
         fprintf(stderr, "  [MTL] instancing %s\n", s_inst_on ? "on" : "off");
     }
     s_st_draws++;
+    if (r[0x30C / 4])
+        s_ff_zdraws++;
     {
         int changed = regs_changed(r);
         if (pend_append(b, changed))
@@ -3501,8 +3560,10 @@ static void mtl_draw_raw_inner(const Nv2aRawBatch *b)
     s_hz_draws++;
 
     /* Textures first: uploads and copies end the pass. */
+    s_quad_clamp = quad_uv01(b, r);
     for (i = 0; i < 4; i++)
         bind_stage(r, (int)i, tscale[i], &tex[i], &smp[i], &sampled[i]);
+    s_quad_clamp = 0;
     {
         /* Motion blur off by default (owner 2026-11-09: flicker while driving and
          * right after stopping; the ring is a feedback layer): skip its composite,
@@ -3554,6 +3615,20 @@ static void mtl_draw_raw_inner(const Nv2aRawBatch *b)
     dp = pass_depth(s, d, r);
     key.depth = dp != NULL;
     key.points = cls == 0;
+    {   /* the W-buffer: depth = w (SET_CONTROL0 Z_PERSPECTIVE_ENABLE, bit 16). RECOMP_MTL_WDEPTH=0 off */
+        static int wd = -1;
+        if (wd < 0) {
+            const char *e = getenv("RECOMP_MTL_WDEPTH");
+            wd = !(e && *e == '0');
+        }
+        key.wdepth = wd && dp && (r[0x290 / 4] & 0x10000u) && r[0x30C / 4];
+        if (key.wdepth)
+            s_frame_wdepth = 1;
+        if (key.wdepth && !s_wd_seen) {
+            s_wd_seen = 1;
+            fprintf(stderr, "[mtl] W-buffer depth in use (control0 %08X)\n", r[0x290 / 4]);
+        }
+    }
     vertex_formats_key(b, key.vfmt);
     if (s_static_stride)
         vertex_strides_key(b, key.vstride);
@@ -4391,8 +4466,28 @@ static void mtl_flip_inner(void)
     }
     VT("flip %u: surface %08X drew %d\n", s_frame, s ? s->va : 0, s_drew_any);
     s_end_depth_dc = 1;
-    if (!s_headless && (!nv2a_mtl_turbo || s_frame % 8 == 1))
-        present(s);                 /* fast-forward: the one frame in 8 drawn is shown */
+    if (nv2a_mtl_turbo == 2) {
+        /* fast-forward: a frame is drawn and shown about every 250 ms -- the first one, from then, that
+         * drew its 3D scene (the title leaves its 3D pass out of most frames); the rest are not drawn */
+        static uint64_t last;
+        struct timespec ts;
+        uint64_t now;
+        clock_gettime(CLOCK_MONOTONIC, &ts);
+        now = (uint64_t)ts.tv_sec * 1000u + (uint64_t)ts.tv_nsec / 1000000u;
+        if (s_ff_show && s_ff_zdraws > 0) {
+            if (!s_headless)
+                present(s);
+            s_ff_show = 0;
+            last = now;
+        } else if (!s_ff_show && now - last >= 250)
+            s_ff_show = 1;
+    } else {
+        s_ff_show = 1;
+        if (!s_headless && (!nv2a_mtl_turbo || s_frame % 8 == 1))
+            present(s);             /* HP1's fast-forward: the one frame in 8 drawn is shown */
+    }
+    s_ff_zdraws = 0;
+    s_frame_wdepth = 0;
     post_frame(s);
     end_pass();
     end_blit();

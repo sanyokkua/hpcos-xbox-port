@@ -17,6 +17,7 @@
 #define NV2A_MSL_VS_CONSTS  17
 #define NV2A_MSL_FS_BLOCK   0
 #define NV2A_MSL_FC_POINTS  0
+#define NV2A_MSL_FC_WDEPTH  1   /* fragment: depth = w (the W-buffer) */
 #define NV2A_MSL_VS_NAME    "nv2a_vs"
 #define NV2A_MSL_FS_NAME    "nv2a_fs"
 

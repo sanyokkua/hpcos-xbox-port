@@ -117,6 +117,7 @@ static const char s_vs_head[] =
     "    float4 vD0; float4 vD1;\n"
     "    float4 vT0; float4 vT1; float4 vT2; float4 vT3;\n"
     "    float vFog;\n"
+    "    float vW;\n"                 /* w / zmax, perspective-correct: the W-buffer's depth */
     "    float psize [[point_size, function_constant(nv2a_points)]];\n"
     "};\n"
     /* gl_vsh.c's NV2A_SNAP_GLSL and Vulkan nv2a_clip, with y negated: real
@@ -192,6 +193,7 @@ static const char s_vs_main_program[] =
     "    float w = abs(s.oPos.w) < 1e-6 ? 1e-6 : s.oPos.w;\n"
     "    float3 sc = float3(s.oPos.xy * U.u_aa, s.oPos.z);\n"
     "    o.pos = nv2a_clip(U, sc * w, w);\n"
+    "    o.vW = w * U.u_surf.z;\n"
     "    o.vD0 = clamp(s.oD0, 0.0, 1.0); o.vD1 = clamp(s.oD1, 0.0, 1.0);\n"
     "    o.vT0 = s.oT0; o.vT1 = s.oT1; o.vT2 = s.oT2; o.vT3 = s.oT3; o.vFog = nv2a_fog(U, s.oFog.x);\n"
     "    if (nv2a_points) o.psize = 1.0;\n"
@@ -210,9 +212,11 @@ static const char s_vs_main_fixed[] =
     "        float3 sw = clip.xyz + U.u_vpoff.xyz * w;\n"
     "        sw.xy *= U.u_aa;\n"
     "        o.pos = nv2a_clip(U, sw, w);\n"
+    "        o.vW = w * U.u_surf.z;\n"
     "    } else {\n"
     "        float w = (in.v0.w > 0.0) ? 1.0 / in.v0.w : 1.0;\n"
     "        o.pos = nv2a_clip(U, in.v0.xyz * w, w);\n"
+    "        o.vW = w * U.u_surf.z;\n"
     "    }\n"
     "    o.vD0 = clamp(in.v3, 0.0, 1.0); o.vD1 = clamp(in.v4, 0.0, 1.0);\n"
     "    float4 t[4] = { in.v9, in.v10, in.v11, in.v12 };\n"
@@ -342,8 +346,16 @@ int nv2a_msl_fragment(const Nv2aPshKey *k, char *buf, size_t cap)
         "    float4 vD0; float4 vD1;\n"
         "    float4 vT0; float4 vT1; float4 vT2; float4 vT3;\n"
         "    float vFog;\n"
+        "    float vW;\n"
         "};\n"
-        "fragment float4 nv2a_fs(FIn in [[stage_in]],\n"
+        /* The W-buffer (SET_CONTROL0 Z_PERSPECTIVE): the depth is w, not z/w (xemu's
+         * z_perspective); the interpolated vW is exact w / zmax. */
+        "constant bool nv2a_wdepth [[function_constant(1)]];\n"
+        "struct FOut {\n"
+        "    float4 c [[color(0)]];\n"
+        "    float d [[depth(any), function_constant(nv2a_wdepth)]];\n"
+        "};\n"
+        "fragment FOut nv2a_fs(FIn in [[stage_in]],\n"
         "                        constant FsU& F [[buffer(0)]]");
     for (i = 0; i < 4; i++)
         emit(&o, ",\n                        %s<float> t%d_tex [[texture(%d)]],"
@@ -369,6 +381,8 @@ int nv2a_msl_fragment(const Nv2aPshKey *k, char *buf, size_t cap)
     memcpy(o.p, body, len);
     o.p += len;
     o.left -= len;
-    emit(&o, "    return fragColor;\n}\n");
+    emit(&o, "    FOut fout_; fout_.c = fragColor;\n"
+             "    if (nv2a_wdepth) fout_.d = clamp(in.vW, 0.0, 1.0);\n"
+             "    return fout_;\n}\n");
     return o.overflow ? -1 : (int)(cap - o.left);
 }

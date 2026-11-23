@@ -141,6 +141,7 @@ static const char *post_msl(void)
         "}\n"
         "struct PostP { float near_, far_, w, h, strength, radius, debug, bloom, fade_m, k; };\n"
         "static float lin(float z, constant PostP& p) {\n"
+        "    if (p.near_ < 0.0) return z * p.far_;\n"          /* the W-buffer: depth is w / w_far already */
         "    return p.near_ / max(1.0 - z * (1.0 - p.near_ / p.far_), 1e-6);\n"
         "}\n"
         "static float ld(depth2d<float> d, int2 q, constant PostP& p) {\n"
@@ -347,6 +348,15 @@ static void post_run(MtSurf *s, MtDepth *d)
     end_blit();
 
     p.near_ = s_ao_near; p.far_ = s_ao_far;
+    if (s_frame_wdepth) {               /* W-buffer depth (hpcos): linear, w_far in world units */
+        static float wfar;
+        if (!wfar) {
+            const char *e = getenv("NFSU2_AO_WFAR");
+            wfar = e && atof(e) > 0 ? (float)atof(e) : 480.0f;   /* CoS: Harry 4 m away reads 0.0092 */
+        }
+        p.near_ = -1.0f;
+        p.far_ = wfar;
+    }
     p.w = (float)s->pw; p.h = (float)s->ph;
     p.strength = ao ? 0.9f : 0.0f;
     p.fade_m = s_ao_fade_m;
@@ -368,6 +378,24 @@ static void post_run(MtSurf *s, MtDepth *d)
         rp.colorAttachments[0].clearColor = MTLClearColorMake(1, 1, 1, 1);
         rp.colorAttachments[0].storeAction = MTLStoreActionStore;
         [[s_cb renderCommandEncoderWithDescriptor:rp] endEncoding];
+    }
+    if (ao && getenv("NFSU2_POST_PROBE") && (s_post_runs % 120) == 0) {
+        /* debug: the scene depth at 5 points (centre, below, above, left, right) */
+        static id<MTLBuffer> pb;
+        static const float at[5][2] = { { .5f, .5f }, { .5f, .85f }, { .5f, .15f }, { .15f, .5f }, { .85f, .5f } };
+        if (!pb) pb = [s_dev newBufferWithLength:64 options:MTLResourceStorageModeShared];
+        for (int i = 0; i < 5; i++)
+            [blit() copyFromTexture:d->tex sourceSlice:0 sourceLevel:0
+                       sourceOrigin:MTLOriginMake((NSUInteger)(at[i][0] * d->pw), (NSUInteger)(at[i][1] * d->ph), 0)
+                         sourceSize:MTLSizeMake(1, 1, 1) toBuffer:pb destinationOffset:(NSUInteger)i * 4
+             destinationBytesPerRow:4 destinationBytesPerImage:4 options:MTLBlitOptionDepthFromDepthStencil];
+        end_blit();
+        [s_cb addCompletedHandler:^(id<MTLCommandBuffer> c) {
+            (void)c;
+            const float *v = (const float *)pb.contents;
+            fprintf(stderr, "[post] depth probe: centre %.6f below %.6f above %.6f left %.6f right %.6f\n",
+                    v[0], v[1], v[2], v[3], v[4]);
+        }];
     }
     if (s_bloom_k > 0) {
         float r[4] = { 4.0f / s->pw, 4.0f / s->ph, 0, 0 };

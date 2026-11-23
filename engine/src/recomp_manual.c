@@ -544,15 +544,23 @@ void sub_0017725D(void)
     esp += 4 + 8;
 }
 
-/* ── Skip Cutscenes (overlay: Tweaks, HPCOS_SKIP_CUTSCENES=1) ──────────────
- * After MiddleDucky's HP2-Recompiled (MIT, port/src/hle_skip.c): holding Start
- * or Back for half a second while a cutscene plays (the camera / control mode
- * [0x50C2E4] is 7, set as a cutscene takes the camera) runs it to its own end
- * 8x as fast: the vblank 8x (the title advances one fixed step a frame), one
- * frame in 8 shown, the APU's clock 8x and the sound muted. Nothing is left
- * out: scripts, speech and camera run as they would, only faster. It stops a
- * moment after the camera mode leaves 7 (a cutscene in two parts goes on). */
+/* ── Cutscene skip (overlay: Tweaks, HPCOS_SKIP_CUTSCENES=1) ────────────────
+ * After MiddleDucky's HP2-Recompiled (MIT, port/src/hle_skip.c): pressing Start
+ * or Back while a cutscene plays (the camera / control mode [0x50C2E4] is 7,
+ * set as a cutscene takes the camera) runs it to its own end as fast as the
+ * runtime can: the vblank FF_SCALE x (the title advances one fixed step a
+ * frame), the GPU draws and shows a frame about every 250 ms only, the APU's
+ * clock as fast and the sound muted. Nothing is left out of the story:
+ * scripts, speech and camera run as they would, only faster, so whatever the
+ * cutscene sets up is set up. It stops a moment after the camera mode leaves 7
+ * and goes on by itself into a next part that starts within 2.5 s. The press
+ * that starts it is not passed to the game. HPCOS_FF_LOG=1 logs every
+ * Start/Back press with the camera mode, and the game's frames a second.
+ * (HP2-Recompiled also leaves out sub_00032980; here that gained nothing, and
+ * sub_00032B70 loops until it returns 0.) */
 #define CAMERA_MODE 0x0050C2E4u
+#define FF_SCALE 6       /* the vblank's speed-up: about 2.5x real (the GPU handshakes cap it at ~140 fps;
+                           * above ~10x the timer thread starves the game) */
 extern volatile int xbox_vblank_turbo, nv2a_mtl_turbo;
 extern void xa2_set_mute(int on);
 static volatile int s_ff;
@@ -571,28 +579,56 @@ static void ff_set(int on)
 {
     if (s_ff == on) return;
     s_ff = on;
-    xbox_vblank_turbo = on ? 8 : 1;
-    nv2a_mtl_turbo = on;
+    {
+        const char *e = getenv("HPCOS_FF_SCALE");
+        int k = e && atoi(e) >= 2 && atoi(e) <= 64 ? atoi(e) : FF_SCALE;
+        xbox_vblank_turbo = on ? k : 1;
+    }
+    nv2a_mtl_turbo = on ? 2 : 0;    /* 2: every frame drawn, only those with the 3D pass shown */
     xa2_set_mute(on);
     fprintf(stderr, "[skip] cutscene fast-forward %s\n", on ? "on" : "off");
 }
-static void cutscene_ff_pad(uint8_t buttons)
+/* Port 0's buttons byte as read; returns the byte the game gets. */
+static uint8_t cutscene_ff_pad(uint8_t buttons)
 {
-    static uint64_t held_since, out_since, ff_since;
+    static uint64_t out_since, ff_since, ended;
+    static uint8_t prev, hidden;
+    static int log = -1;
     uint64_t now = ff_now_ms();
+    uint8_t press = (uint8_t)(buttons & ~prev & 0x30);
     int cut = MEM32(CAMERA_MODE) == 7u;
+    prev = buttons;
+    if (log < 0) { const char *e = getenv("HPCOS_FF_LOG"); log = e && *e == '1'; }
+    if (log) {                          /* game input reads a second (~ the title's frames) */
+        static uint64_t t0; static unsigned n;
+        n++;
+        if (now - t0 >= 1000) {
+            if (t0) fprintf(stderr, "[skip] %u pad reads/s, camera mode %u, ff %d\n", n, MEM32(CAMERA_MODE), s_ff);
+            t0 = now; n = 0;
+        }
+    }
+    if (log && press)
+        fprintf(stderr, "[skip] %s pressed, camera mode %u\n", press & 0x10 ? "Start" : "Back", MEM32(CAMERA_MODE));
+    hidden &= buttons;                  /* a hidden press stays hidden until released */
     if (s_ff) {
         if (cut) out_since = 0;
         else if (!out_since) out_since = now;
-        if ((out_since && now - out_since > 1500) || now - ff_since > 180000)
+        if ((out_since && now - out_since > 1500) || now - ff_since > 180000) {
+            ended = out_since ? now : 0;
             ff_set(0);
-        return;
+        }
+    } else if (cut && ended && now - ended < 2500 && ff_enabled()) {
+        ended = 0;                      /* the next part of a cutscene in two goes on fast too */
+        ff_since = now;
+        out_since = 0;
+        ff_set(1);
+    } else if (cut && press && ff_enabled()) {
+        ff_since = now;
+        out_since = 0;
+        hidden |= press;
+        ff_set(1);
     }
-    if (cut && ff_enabled() && (buttons & 0x30)) {
-        if (!held_since) held_since = now;
-        if (now - held_since >= 500) { ff_since = now; out_since = 0; held_since = 0; ff_set(1); }
-    } else
-        held_since = 0;
+    return (uint8_t)(buttons & ~hidden);
 }
 
 /* XInputGetState(hDevice, pState): dwPacketNumber, then XINPUT_GAMEPAD
@@ -606,13 +642,13 @@ void sub_0017743B(void)
     uint8_t rep[20];
     int i = xi_hle() ? xi_index(ARG(0)) : -2, k;
     if (i == -2) { sub_0017743B_gen(); return; }
-    if (i >= 0 && usb_gamepad_connected((int)s_xi[i].port)
-            && usb_gamepad_report((int)s_xi[i].port, rep, (int)sizeof rep) >= 20)
-        cutscene_ff_pad(rep[2]);
+    int have = i >= 0 && usb_gamepad_connected((int)s_xi[i].port)
+            && usb_gamepad_report((int)s_xi[i].port, rep, (int)sizeof rep) >= 20;
+    if (have)
+        rep[2] = cutscene_ff_pad(rep[2]);
     if (i < 0) {
         eax = 6;
-    } else if (!usb_gamepad_connected((int)s_xi[i].port)
-               || usb_gamepad_report((int)s_xi[i].port, rep, (int)sizeof rep) < 20) {
+    } else if (!have) {
         eax = 1167;
     } else {
         static int log = -1;
@@ -621,8 +657,8 @@ void sub_0017743B(void)
                 s_xi[i].packet++;
                 if (log < 0) { const char *e = getenv("HPCOS_PAD_LOG"); log = e && *e == '1'; }
                 if (log)
-                    fprintf(stderr, "[pad] port %u buttons %02X analog %02X %02X %02X %02X %02X %02X %02X %02X"
-                            " LX %d LY %d RX %d RY %d\n", s_xi[i].port, rep[2], rep[4], rep[5], rep[6], rep[7],
+                    fprintf(stderr, "[pad] %llu ms port %u buttons %02X analog %02X %02X %02X %02X %02X %02X %02X %02X"
+                            " LX %d LY %d RX %d RY %d\n", (unsigned long long)ff_now_ms(), s_xi[i].port, rep[2], rep[4], rep[5], rep[6], rep[7],
                             rep[8], rep[9], rep[10], rep[11], (int16_t)(rep[12] | rep[13] << 8),
                             (int16_t)(rep[14] | rep[15] << 8), (int16_t)(rep[16] | rep[17] << 8),
                             (int16_t)(rep[18] | rep[19] << 8));
