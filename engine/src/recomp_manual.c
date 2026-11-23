@@ -586,6 +586,39 @@ static void ff_set(int on)
     xa2_set_mute(on);
     fprintf(stderr, "[skip] cutscene fast-forward %s\n", on ? "on" : "off");
 }
+/* Dev: HPCOS_WARP=<level>[:start] loads that level once, 3 s into play (camera mode 0),
+ * the way the pause menu's debug level selector does (HP-COS's trainer, 0x4F268:
+ * sub_0004AD50(level), the start point at 0x527DFC and 0x1EF704). Levels by the table
+ * at 0x1E3DE8: 0 The Burrow, 4 Borgin & Burkes, 5 Diagon Alley, 30 Gryffindor Common
+ * Room, ... (HP-COS's trainer.c). For tests only: no menu row. */
+extern void sub_0004AD50(void);
+static void dev_warp(void)
+{
+    static int done, level = -2, start = -1;
+    static uint64_t since;
+    if (done) return;
+    if (level == -2) {
+        const char *e = getenv("HPCOS_WARP");
+        level = e && *e ? atoi(e) : -1;
+        if (e && strchr(e, ':')) start = atoi(strchr(e, ':') + 1);
+        if (level < 0) { done = 1; return; }
+    }
+    if (MEM32(CAMERA_MODE) != 0u) { since = 0; return; }
+    if (!since) { since = ff_now_ms(); return; }
+    if (ff_now_ms() - since < 3000) return;
+    done = 1;
+    {
+        uint32_t s_esp = esp, s_ebx = ebx, s_esi = esi, s_edi = edi, s_ebp = g_ebp;
+        esp -= 4; MEM32(esp) = (uint32_t)level;
+        esp -= 4; MEM32(esp) = 0;               /* return address */
+        sub_0004AD50();
+        esp = s_esp; ebx = s_ebx; esi = s_esi; edi = s_edi; g_ebp = s_ebp;
+    }
+    MEM16(0x00527DFCu) = (uint16_t)start;
+    MEM32(0x001EF704u) = (uint32_t)start;
+    fprintf(stderr, "[warp] level %d, start %d\n", level, start);
+}
+
 /* Port 0's buttons byte as read; returns the byte the game gets. */
 static uint8_t cutscene_ff_pad(uint8_t buttons)
 {
@@ -594,6 +627,13 @@ static uint8_t cutscene_ff_pad(uint8_t buttons)
     static int log = -1;
     uint64_t now = ff_now_ms();
     uint8_t press = (uint8_t)(buttons & ~prev & 0x30);
+    dev_warp();
+    {   /* Dev: HPCOS_PAUSE_OPTS=<mask> ORs the pause menu's debug rows into [0x527F26]
+         * (0x200 the Level Selector, HP-COS) */
+        static int m = -1;
+        if (m < 0) { const char *e = getenv("HPCOS_PAUSE_OPTS"); m = e ? (int)strtol(e, NULL, 0) : 0; }
+        if (m) MEM16(0x00527F26u) |= (uint16_t)m;
+    }
     int cut = MEM32(CAMERA_MODE) == 7u;
     prev = buttons;
     if (log < 0) { const char *e = getenv("HPCOS_FF_LOG"); log = e && *e == '1'; }
@@ -1181,6 +1221,88 @@ void sub_00114A10(void)
     sub_0010E5D2();                         /* WaitForSingleObject, stdcall: pops it and the 2 args */
     esp += 4;                               /* our own return */
 }
+
+/* HPCOS_FC_TRACE=1: the file cache's list operations -- take the head (sub_00114BF0(list)
+ * -> item) and push (sub_00114B60(list, item)); the item's id [+4] and kind [+8]. */
+extern void sub_00114BF0_gen(void);
+void sub_00114BF0(void)
+{
+    uint32_t list = MEM32(esp + 4), ret = MEM32(esp);
+    sub_00114BF0_gen();
+    if (fc_trace() && eax)
+        fprintf(stderr, "[fc] t%d take %08X from list %08X (ret %08X): id %08X kind %u\n", fc_me(), eax, list, ret,
+                MEM32(eax + 4), MEM32(eax + 8));
+}
+extern void sub_00114B60_gen(void);
+void sub_00114B60(void)
+{
+    uint32_t list = MEM32(esp + 4), item = MEM32(esp + 8), ret = MEM32(esp);
+    if (fc_trace() && item)
+        fprintf(stderr, "[fc] t%d push %08X to list %08X (ret %08X): id %08X kind %u cb %08X status %d err %08X\n", fc_me(),
+                item, list, ret, MEM32(item + 4), MEM32(item + 8), MEM32(item + 0x20), (int8_t)MEM8(item + 0x10),
+                MEM32(item + 0x14));
+    sub_00114B60_gen();
+}
+
+/* The boot loader's file-cache callbacks (cb(id, status, value), cdecl; called on the
+ * cache's worker thread) published the loader's next state [0x1BE8C8] FIRST, then
+ * released the request (sub_00112BA0) and stored its result (the file id at 0x436F40 /
+ * 0x436F44). The release blocks on the cache's lock while the main thread holds it to
+ * poll, so the main thread saw the new state, read the previous file's id and seeked a
+ * closed file: STATUS_INVALID_HANDLE, a failed request, and the loader waited for good
+ * (a stall at boot, ~1 in 15-30). The console's scheduler made that window vanishingly
+ * small. Same work, state last. HPCOS_LOADER_ORDER=0: the title's order. */
+static int loader_order_on(void)
+{
+    static int on = -1;
+    if (on < 0) { const char *e = getenv("HPCOS_LOADER_ORDER"); on = !(e && *e == '0'); }
+    return on;
+}
+static uint32_t fc_release(uint32_t id)
+{
+    esp -= 4; MEM32(esp) = id;
+    esp -= 4; MEM32(esp) = 0;               /* return address */
+    sub_00112BA0();                         /* cdecl: pops the return address */
+    esp += 4;                               /* the argument */
+    return eax;
+}
+static void loader_cb(uint32_t state_va, uint32_t state, uint32_t store_va, uint32_t clear_va)
+{
+    if (MEM32(esp + 8) == 1u) {
+        uint32_t r = fc_release(MEM32(esp + 4));
+        if (store_va) MEM32(store_va) = r;
+        if (clear_va) MEM32(clear_va) = 0;
+        MEM32(state_va) = state;
+    }
+    esp += 4;                               /* ret */
+}
+/* every callback of this shape in the title (a scan for cmp [esp+8],1 / mov [state],n /
+ * call sub_00112BA0): the boot loader [0x1BE8C8] and the level loader [0x436F2C]. Written out
+ * one by one: the lifter finds overrides by their definitions. */
+extern void sub_000163E0_gen(void);
+void sub_000163E0(void) { if (loader_order_on()) loader_cb(0x001BE8C8u, 4, 0, 0x00436F60u); else sub_000163E0_gen(); }
+extern void sub_00016410_gen(void);
+void sub_00016410(void) { if (loader_order_on()) loader_cb(0x001BE8C8u, 1, 0x00436F40u, 0); else sub_00016410_gen(); }
+extern void sub_00016440_gen(void);
+void sub_00016440(void) { if (loader_order_on()) loader_cb(0x001BE8C8u, 5, 0, 0); else sub_00016440_gen(); }
+extern void sub_00016460_gen(void);
+void sub_00016460(void) { if (loader_order_on()) loader_cb(0x001BE8C8u, 9, 0, 0x00436F60u); else sub_00016460_gen(); }
+extern void sub_00016490_gen(void);
+void sub_00016490(void) { if (loader_order_on()) loader_cb(0x001BE8C8u, 7, 0x00436F44u, 0); else sub_00016490_gen(); }
+extern void sub_000164C0_gen(void);
+void sub_000164C0(void) { if (loader_order_on()) loader_cb(0x001BE8C8u, 8, 0, 0); else sub_000164C0_gen(); }
+extern void sub_000164E0_gen(void);
+void sub_000164E0(void) { if (loader_order_on()) loader_cb(0x00436F2Cu, 12, 0x00436F58u, 0); else sub_000164E0_gen(); }
+extern void sub_00016510_gen(void);
+void sub_00016510(void) { if (loader_order_on()) loader_cb(0x00436F2Cu, 15, 0, 0); else sub_00016510_gen(); }
+extern void sub_00016530_gen(void);
+void sub_00016530(void) { if (loader_order_on()) loader_cb(0x00436F2Cu, 20, 0, 0); else sub_00016530_gen(); }
+extern void sub_00016550_gen(void);
+void sub_00016550(void) { if (loader_order_on()) loader_cb(0x00436F2Cu, 19, 0, 0); else sub_00016550_gen(); }
+extern void sub_00016570_gen(void);
+void sub_00016570(void) { if (loader_order_on()) loader_cb(0x00436F2Cu, 17, 0x00436F5Cu, 0); else sub_00016570_gen(); }
+extern void sub_000165A0_gen(void);
+void sub_000165A0(void) { if (loader_order_on()) loader_cb(0x00436F2Cu, 18, 0, 0); else sub_000165A0_gen(); }
 
 static void fc_owner_moves_on(void)
 {

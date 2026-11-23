@@ -3727,18 +3727,34 @@ static void bridge_write_iostatus(uint32_t ios_va, NTSTATUS status, uint32_t inf
 #define BRIDGE_HANDLE_MASK 0x00FFFFFFu
 #define BRIDGE_HANDLE_MAX  16384
 static HANDLE s_handle_table[BRIDGE_HANDLE_MAX];
+/* hpcos-xbox-port: the table is shared by every guest thread, and file calls run
+ * outside the guest lock. Two threads opening at once both took the same free
+ * slot: one file's token then named the other's handle, and its next call failed
+ * with STATUS_INVALID_HANDLE (CoS: a stall at boot, 1 in ~30; the "disc is dirty"
+ * screen). Taking and freeing slots is now under this spinlock. */
+static volatile int s_handle_lock;
+static void handle_lock(void)
+{
+    while (__atomic_exchange_n(&s_handle_lock, 1, __ATOMIC_ACQUIRE))
+        while (__atomic_load_n(&s_handle_lock, __ATOMIC_RELAXED))
+            ;
+}
+static void handle_unlock(void) { __atomic_store_n(&s_handle_lock, 0, __ATOMIC_RELEASE); }
 
 static uint32_t bridge_handle_token(HANDLE h)
 {
     int i;
     if (!h || h == INVALID_HANDLE_VALUE) return 0;
+    handle_lock();
     for (i = 1; i < BRIDGE_HANDLE_MAX; i++)
-        if (s_handle_table[i] == h) return BRIDGE_HANDLE_TAG | (uint32_t)i;
+        if (s_handle_table[i] == h) { handle_unlock(); return BRIDGE_HANDLE_TAG | (uint32_t)i; }
     for (i = 1; i < BRIDGE_HANDLE_MAX; i++)
         if (s_handle_table[i] == NULL) {
             s_handle_table[i] = h;
+            handle_unlock();
             return BRIDGE_HANDLE_TAG | (uint32_t)i;
         }
+    handle_unlock();
     fprintf(stderr, "  [BRIDGE] handle table full\n");
     return 0;
 }
@@ -3805,8 +3821,11 @@ static HANDLE bridge_take_handle(uint32_t token)
     if ((token & 0xFF000000u) == BRIDGE_HANDLE_TAG) {
         uint32_t i = token & BRIDGE_HANDLE_MASK;
         if (i > 0 && i < BRIDGE_HANDLE_MAX) {
-            HANDLE h = s_handle_table[i];
+            HANDLE h;
+            handle_lock();
+            h = s_handle_table[i];
             s_handle_table[i] = NULL;
+            handle_unlock();
             return h;
         }
     }
