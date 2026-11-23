@@ -1127,9 +1127,31 @@ static HANDLE bridge_take_handle(uint32_t token);
 
 void xbox_dir_forget(HANDLE h);   /* kernel_file.c */
 
+/* hpcos-xbox-port: handles closed in the last 2 s. A title's reader thread can
+ * read a file its main thread has just closed (CoS's movie player when the
+ * intro is skipped): on the console that read had long been issued; here it
+ * comes after and failed with STATUS_INVALID_HANDLE, which the title takes for
+ * a disc error ("the disc is dirty"). Such a read now ends the file
+ * (STATUS_END_OF_FILE, nothing read). */
+static struct { uint32_t token; ULONGLONG at; } s_closed[16];
+static volatile LONG s_closed_n;
+static int bridge_recently_closed(uint32_t token)
+{
+    ULONGLONG now = GetTickCount64();
+    for (int i = 0; i < 16; i++)
+        if (s_closed[i].token == token && now - s_closed[i].at < 2000)
+            return 1;
+    return 0;
+}
+
 static void bridge_NtClose(void)
 {
     uint32_t raw_handle = STACK_ARG(0);
+    {
+        LONG k = InterlockedIncrement(&s_closed_n) & 15;
+        s_closed[k].at = GetTickCount64();
+        s_closed[k].token = raw_handle;
+    }
 
     if (KERNEL_LOG_ON()) {
         fprintf(stderr, "  [KERNEL] NtClose: handle=0x%08X\n", raw_handle);
@@ -2693,6 +2715,7 @@ static void bridge_HalReadSMCTrayState(void)
 /* The DPC D3D's ISR queued for the GPU interrupt, as seen during a vblank
  * raise (see kernel_vblank_tick). */
 static uint32_t g_vblank_dpc;
+static volatile LONG s_nv2a_dpc_busy;   /* the NV2A DPC is running */
 /* Title hook run under the GIL right after the vblank DPC (optional). */
 __attribute__((weak)) void xbox_after_vblank_dpc(void) {}  /* hp1-xbox-port: Mach-O needs a definition (as NFSU1) */
 static RECOMP_TLS int t_in_vblank_isr;
@@ -2730,15 +2753,20 @@ static int kernel_run_dpc(uint32_t dpc_va, uint32_t arg1, uint32_t arg2)
      * the routine reads them first thing. */
     xbox_gil_enter();
     t_gil_nopreempt++;
-    if (dpc_va == g_vblank_dpc)
+    if (dpc_va == g_vblank_dpc) {
+        InterlockedIncrement(&s_nv2a_dpc_busy);
         xbox_Nv2aVblankRelease();
+    }
     fn();
     if (dpc_va == g_vblank_dpc && xbox_after_vblank_dpc)
         xbox_after_vblank_dpc();
+    if (dpc_va == g_vblank_dpc)
+        InterlockedDecrement(&s_nv2a_dpc_busy);
     t_gil_nopreempt--;
     xbox_gil_leave();
     return 1;
 }
+
 
 /* -- KeSynchronizeExecution (ordinal 153) ------------------
  * BOOLEAN KeSynchronizeExecution(PKINTERRUPT Interrupt,
@@ -3059,6 +3087,20 @@ static DWORD kernel_vblank_wait_ms(void)
     d = (d + 999) / 1000;
 #endif
     return d > 10 ? 10 : (DWORD)d;
+}
+
+/* hpcos-xbox-port: the NV2A's DPC (the D3D one: vblank and PGRAPH work) is
+ * queued or running. The PB executor holds the next InsertCallback's latch
+ * until it is not (nv2a_pb_exec.c). */
+int xbox_Nv2aDpcBusy(void)
+{
+    int q;
+    if (InterlockedCompareExchange(&s_nv2a_dpc_busy, 0, 0))
+        return 1;
+    dpc_lock();
+    q = g_vblank_dpc && KDPC_INSERTED(g_vblank_dpc);
+    dpc_unlock();
+    return q;
 }
 
 static void kernel_vblank_tick(void)
@@ -4352,6 +4394,15 @@ static void bridge_NtReadFile(void)
         QueryPerformanceCounter(&a);
         g_eax = (uint32_t)xbox_NtReadFile(handle, NULL, NULL, NULL, &ios,
                     XBOX_TO_NATIVE(buffer_va), length, poff);
+        if (g_eax == 0xC0000008u && bridge_recently_closed(STACK_ARG(0))) {
+            static int said;
+            if (said++ < 4)
+                fprintf(stderr, "  [READ] handle 0x%08X closed a moment ago: end of file, not a disc error\n",
+                        STACK_ARG(0));
+            ios.Status = (NTSTATUS)0xC0000011;   /* STATUS_END_OF_FILE */
+            ios.Information = 0;
+            g_eax = 0xC0000011u;
+        }
         QueryPerformanceCounter(&b);
         us = (uint64_t)((b.QuadPart - a.QuadPart) * 1000000 / f.QuadPart);
         s_io.reads++;

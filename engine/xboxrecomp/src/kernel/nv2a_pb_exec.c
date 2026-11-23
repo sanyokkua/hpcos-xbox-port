@@ -4119,9 +4119,19 @@ void nv2a_pb_trap_taken(void)
     SetEvent(driver_event());
 }
 
+static uint32_t s_cb_latch[2], s_cb_latch_set;   /* InsertCallback's pair, for the next trap */
 static void trap_deliver_hooked(volatile uint32_t *nv, uint32_t method,
                                 uint32_t subch, uint32_t param)
 {
+    if (s_cb_latch_set) {
+        extern int xbox_Nv2aDpcBusy(void);
+        ULONGLONG until = GetTickCount64() + 500;
+        while (xbox_Nv2aDpcBusy() && GetTickCount64() < until)
+            Sleep(0);
+        if (s_cb_latch_set & 1) nv[0x401A88 / 4] = s_cb_latch[0];
+        if (s_cb_latch_set & 2) nv[0x40186C / 4] = s_cb_latch[1];
+        s_cb_latch_set = 0;
+    }
     extern void xbox_set_irq_line(uint32_t vector, int level);
     extern void xbox_Nv2aHoldInterrupts(int on);
     ULONGLONG give_up = GetTickCount64() + 2000;
@@ -4396,9 +4406,13 @@ void nv2a_pb_exec_method(uint32_t subch, uint32_t method, uint32_t param)
      * [0x401A88]([0x40186C]). Unlatched, it called a null pointer, the trap
      * never finished and the interrupt stayed masked: a hang on the first
      * loading screen. Not a return: the method still does its state work. */
+    /* The values reach PGRAPH when the NOP trap is raised (trap_deliver_hooked),
+     * once the previous callback's DPC is done: written here at once, a clear
+     * after the callback overwrote it before the late DPC read it (it called
+     * 0xFFFFFF00, a Z/stencil clear value: a crash 1 boot in ~6 under load). */
     if (subch == 0 && (method == 0x1D8C || method == 0x1D90)) {
-        uint8_t *mem = (uint8_t *)xbox_GetMemoryOffset();
-        *(volatile uint32_t *)(mem + (method == 0x1D8C ? 0xFD401A88u : 0xFD40186Cu)) = param;
+        s_cb_latch[method == 0x1D8C ? 0 : 1] = param;
+        s_cb_latch_set |= method == 0x1D8C ? 1 : 2;
     }
     if (!inited) {
         inited = 1;

@@ -1116,6 +1116,24 @@ void sub_00114EB0(void)
     sub_00114EB0_gen();
 }
 
+/* The worker's wait for work (sub_00114A10, called at 0x112636 when its queue is empty):
+ * WaitForSingleObject(event, INFINITE) becomes 50 ms waits. A wake-up lost between the
+ * queue's SetEvent and this wait left the main thread polling a request nobody served (a
+ * stall at boot or a loading screen); a timeout only sends the worker round its loop, which
+ * finds the queue empty and waits again. HPCOS_FC_WAIT_MS=0: INFINITE as the title. */
+extern void sub_0010E5D2(void);
+void sub_00114A10(void)
+{
+    static int ms = -1;
+    uint32_t ret = MEM32(esp), h = MEM32(MEM32(esp + 4) + 4);
+    if (ms < 0) { const char *e = getenv("HPCOS_FC_WAIT_MS"); ms = e ? atoi(e) : 50; }
+    esp -= 4; MEM32(esp) = (ret == 0x0011263Bu && ms > 0) ? (uint32_t)ms : 0xFFFFFFFFu;
+    esp -= 4; MEM32(esp) = h;
+    esp -= 4; MEM32(esp) = 0x00114A1Fu;     /* as the title's call: its return address */
+    sub_0010E5D2();                         /* WaitForSingleObject, stdcall: pops it and the 2 args */
+    esp += 4;                               /* our own return */
+}
+
 static void fc_owner_moves_on(void)
 {
     static int rel = -1;

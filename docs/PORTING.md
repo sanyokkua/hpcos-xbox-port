@@ -12,7 +12,7 @@ Warthog's engine of HP1 (2003): only the platform stack (Xbox kernel, D3D8, NV2A
 |---|---|---|
 | Engine, overlay menu, installer | [sanyokkua/hp1-xbox-port](https://github.com/sanyokkua/hp1-xbox-port), the NFS Underground 2 port's engine (xboxrecomp, nfsu2-sw, nfsu2-ios, NFSU2Deadware's patches) | v0.1.0 |
 | This game's facts | [MiddleDucky/HP-COS-Xbox-Recomp](https://github.com/MiddleDucky/HP-COS-Xbox-Recomp) (MIT, Windows recomp of the same disc, same NTSC addresses) | `f45cb33` (2026-11-18) |
-| Cutscene fast-forward design | [Barthes-Recompiled/HP2-Recompiled](https://github.com/Barthes-Recompiled/HP2-Recompiled) (a fork of HP-COS, MIT) | |
+| Cutscene skip design | [Barthes-Recompiled/HP2-Recompiled](https://github.com/Barthes-Recompiled/HP2-Recompiled) (a fork of HP-COS, MIT) | |
 | Controller design | [MiddleDucky/HP-PS-Xbox-Recomp](https://github.com/MiddleDucky/HP-PS-Xbox-Recomp) (MIT) | |
 | Disc | Xbox USA, `default.xbe` 2,174,976 bytes, SHA-1 `dd881f2c786464046f705bbe21f222e847d970ce`, title `0x4541000E`, XDK 5028, entry `0x10E698`, `.text` 1,177,120 bytes | section digests in `mac/xbe_check.py` |
 
@@ -76,13 +76,57 @@ Each was a hang or a black screen.
     combiners never read: 60 fps.
 11. **The patched function:** see section 2 (`patch_gen.py`).
 
+## 3b. After the owner's first play test (2026-11-23)
+
+The owner played about 10 minutes from a recording and a log. What was wrong, and the fixes:
+
+1. **Windows flickered** (decals z-fighting their walls). The game draws its 3D with the W-buffer on (`SET_CONTROL0` bit 16,
+   `Z_PERSPECTIVE_ENABLE`: control0 `0x00110001`), where the depth is w, not z/w. The renderer stored z/w, whose precision far
+   off is too poor for a window a few centimetres in front of its wall. Now such draws write depth = w / zmax from the fragment
+   shader (a perspective-correct varying, so exact; a pipeline variant, `RECOMP_MTL_WDEPTH=0` off). A burst of 11 frames 0.1 s
+   apart over the intro's house: 3 flickered before, none after. HP-COS does the same with a log2(1 + w) depth.
+2. **Shadows that slid with the camera, and a haze over some scenes**: the ambient occlusion (Settings > Graphics > Effects,
+   "Bloom + Ambient Occlusion") linearised the depth with NFS's near and far planes. With W-depth its sky dome read as near,
+   so the sky behind the trees darkened (the haze) and dark halos ran along walls. AO now reads the W-buffer as linear depth
+   with w_far = 480 world units (`NFSU2_AO_WFAR`; measured: Harry 4 m away reads 0.0092, a debug probe
+   `NFSU2_POST_PROBE=1`). The occlusion term now shows contact shadows only.
+3. **A line through the title picture** (and one more at 80 %): the 640-wide picture is three tiles 256 wide with WRAP
+   addressing that overlap by half a console pixel. Upscaled, the overlap's sub-pixels sample just past u = 1, blended with
+   the tile's opposite (dark) edge. A screen quad (no depth test, 3-6 vertices) whose texture coordinates span [0, 1] samples
+   stage 0 clamped to its edge (`RECOMP_MTL_QUADCLAMP=0` off; HP-COS holds them half a texel inside).
+4. **Cutscenes were not skipped**: the hold-for-half-a-second design was missed in play (13 Start presses, none held). Now one
+   press of Start or Back in a cutscene (camera mode `[0x50C2E4]` 7) starts it, and that press is hidden from the game. The
+   vblank speed-up alone gave only 1.3x: each frame's ~14 NOP-trap callbacks and its flip stall are handshakes with the guest
+   driver, and the GPU still drew every frame. Now the GPU draws and shows a frame about every 250 ms (only one with its 3D
+   pass) and the vblank runs 6x: about 2.4x real (130-180 game frames a second), the intro's last 56 s in 23 s. Faster vblanks
+   (10x+) starve the timer thread (4 fps). HP2-Recompiled also leaves out `sub_00032980`; here that gained nothing, and its
+   caller `sub_00032B70` loops until it returns 0 (left out without eax = 0, a hang). A next part that starts within 2.5 s
+   goes on fast too.
+5. **Controller**: LB / RB were Black / White; the Controller S has White on the left: LB is White, RB is Black now (xemu,
+   HP-COS). "Presses ignored now and then": a press that begins and ends between two reads of the game (a slow frame, a load)
+   was lost. The controller events now latch presses until the next read (`RECOMP_PAD_LATCH=0` off). The play-test log has
+   timestamps on `[pad]` lines now, for the next report.
+6. **A crash, 1 boot in ~6 under load**: D3D's DPC called 0xFFFFFF00. InsertCallback's pair went straight into PGRAPH
+   0x1A88 / 0x186C (item 3 of section 3), and a later Z clear (0xFFFFFF00) overwrote it before the deferred DPC read it. The
+   pair is now held by the executor and written when its NOP trap is raised, once the NV2A DPC is not queued or running.
+7. **The load hang** (a stall at boot or a loading screen, the main thread polling a request whose callback never ran):
+   the worker's wait for work (`sub_00114A10`, INFINITE) is now 50 ms waits (`HPCOS_FC_WAIT_MS`), so a lost wake-up costs
+   50 ms instead of the game. That was not the whole cause: 1 stall in 36 boots (6 at once) remains, at boot while
+   `egos.geo` opens (the hook of request 0xC00 ran, its callback 0x163E0 never did). Open.
+   **"The disc is dirty"**: skipping the intro movie closes its file while the movie's reader thread still reads it; the read
+   failed with STATUS_INVALID_HANDLE, a disc error to the game (seen 1 boot in 18 with the A press at 24 s). A read on a handle
+   closed in the last 2 s now ends the file instead (STATUS_END_OF_FILE).
+8. **Saves**: the game has no save menu. It saves by itself to the slot chosen at New Game (Slot A/B/C, "Continue" on the
+   title); the "Save Game" text in the disc belongs to a debug menu ("Level Selector", "Cheats"). The Burrow has no save
+   point; the save code is the same XAPI path as HP1's, where saving works.
+
 ## 4. Port features
 
 - **Settings menu** (the NFS ports' overlay): this game's rows in `engine/src/overlay/`. Pages: Display, Graphics, Audio, Input,
   Tweaks, Advanced.
 - **Skip Logo Movies** (the logo skip of HP-COS): off by default.
-- **Cutscene Fast-Forward** (the design of HP2-Recompiled): on by default. Hold Start or Back for half a second in a cutscene
-  and it plays to its end about 8x as fast, muted. Nothing is left out.
+- **Skip Cutscenes** (the design of HP2-Recompiled): on by default. Press Start or Back in a cutscene and it runs to its end
+  as fast as the runtime can (about 2.4x), muted, the picture updated 4 times a second. Nothing is left out. See 3b, item 4.
 - **Controller:** XInput functions at the addresses from HP-COS, with the direct design of HP-PS-Xbox-Recomp, fed from the
   runtime's pad report (so the keyboard, scripted input and the menu's neutral pad still apply). A radial stick dead zone
   (`engine/xboxrecomp/src/input/stick_deadzone.h`).
@@ -119,7 +163,7 @@ Debug switches added for this game:
 - Scripted runs on an M1 Pro: the logos and the intro movie, the title, New Game and the save-slot screen, loading, the Burrow
   intro cutscene with subtitles and speech, free play at the Burrow (Harry walks and casts, the HUD, the Flipendo tutorial,
   Fred, George and Ron), the pause menu and the game's Options, 60 fps at 3x, sound.
-- Boots: about 1 load hang in 30 with 6 at once (see 8). Audio: output dumps of the logos, the intro, the title menu and the
+- Boots: 35 of 36 to the intro cutscene with 6 at once before the end-of-file fix, the 36th a stall at boot (see 3b, 6 and 7). Audio: output dumps of the logos, the intro, the title menu and the
   Burrow are continuous, with no clicks or noise bursts beyond the sounds themselves.
 - `tools/make_dmg.sh`: DMG 5.2 MB, `tests/dmg_no_game_code.sh` PASS (2,263 disc files, 64 code windows).
 - A clean install from the DMG: **1 min 27 s** on the M1 Pro.
@@ -129,7 +173,7 @@ Debug switches added for this game:
 - **Saving and loading** are not tested. The game saves at story points; the tests did not reach one.
 - **Anything past the Burrow** is not tested.
 - **Widescreen:** 4:3 only. **PAL disc:** not supported.
-- **"Disc is dirty" screen:** seen once in about 70 boots. An invalid-handle read on the music stream; under investigation.
+- **A stall at boot or a loading screen**, about 1 boot in 36 with 6 at once (3b, item 7): restart the game.
 - **The file-cache hold** makes the old 1-in-8 load hang rare, but it works around a timing difference between the console and
   this runtime. It is not a proven cure.
 

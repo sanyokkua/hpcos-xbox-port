@@ -8,7 +8,7 @@ Silicon Macs.
 The game's own program, translated from the Xbox's x86 code into C and compiled for your Mac. It is not an emulator: there is no
 virtual Xbox, the game runs as a normal Mac app, with the disc's own levels, voices, music, cutscenes and movies. On top of that it
 has the things that make it play well on a Mac: up to 4x the Xbox's resolution, anti-aliasing, sharper textures at an angle,
-bloom, a settings menu over the game, and a few tweaks: skip the logo movies, and fast-forward through cutscenes.
+bloom, a settings menu over the game, and a few tweaks: skip the logo movies, and skip cutscenes.
 
 Almost everything here is other people's work, and this is their port as much as ours:
 
@@ -36,13 +36,12 @@ and the opening cutscene at the Burrow into free play there (Harry walks and cas
 and Ron), at 60 fps at 3x on an M1 Pro. The pause menu and the game's Options work, and there is sound.
 
 - It is an experiment, worked on when time allows; it is **not actively supported**.
-- **Saving and loading are not tested** (the game saves at story points, which the tests did not reach), and **nothing past the
-  Burrow has been played**.
+- **Saving and loading are not tested.** The game has no save menu: it saves by itself, to the slot picked at New Game, at
+  story points. The Burrow has none, and the tests did not get further.
+- Only the Burrow and the start of the next chapter have been played.
+- A rare stall at boot or at a loading screen remains (about 1 boot in 36 in tests): restart the game if "loading" never ends.
 - **4:3 only** (no widescreen).
 - Apple Silicon and **macOS 15 or newer** only, and only the **Xbox USA disc** (the PAL edition is not supported).
-- A rare "disc is dirty" screen was seen once in about 70 boots. A load hang at the first loading screen that used to hit about 1 boot
-  in 8 still happens now and then (about 1 in 30 boots when 6 run at once; 1 of 4 smoke tests): restart the game if the
-  "loading" never ends (details in PORTING.md).
 
 How it was made, step by step: [docs/PORTING.md](docs/PORTING.md). Changes per version: [CHANGELOG.md](CHANGELOG.md).
 
@@ -83,7 +82,9 @@ the game runs. The sticks have a small dead zone, so a pad that rests a little o
 | Tab / P | Back / Start | pause |
 | I J K L | right stick | the camera |
 
-The keys can't be changed yet. The controller's buttons are the game's own Xbox layout.
+The keys can't be changed yet. The controller's buttons are the game's own Xbox layout. A modern pad's bumpers stand in for the
+original controller's White and Black buttons: **LB is White, RB is Black** (as in xemu), the triggers are the triggers and the stick
+clicks are L3 / R3. A press shorter than one of the game's frames is still seen once.
 
 ### The settings menu
 
@@ -112,7 +113,7 @@ and, after a change, whether it was applied at once or needs a restart. At the b
 | Input | Vibration | Off, 10-100% (100% default) | at once |
 | | Keyboard as Controller | Without a controller (default), Always, Off | after a restart |
 | Tweaks | Skip Logo Movies | Off (default), On: no Warner Bros. and EA logos at the start | at the next start |
-| | Cutscene Fast-Forward | On (default), Off: hold **Start** or **Back** for half a second in a cutscene and it plays to its end about 8x as fast, muted, with nothing left out | at once |
+| | Skip Cutscenes | On (default), Off: press **Start** or **Back** in a cutscene and it runs to its end as fast as the Mac can (about 2.5x; the picture updates 4 times a second, the sound is muted). Nothing is cut from the story, so whatever the cutscene sets up is set up. A cutscene in two parts goes on into the second | at once |
 | Advanced | Performance Overlay | frames per second and the slowest frame, top left | at once (also **Cmd+Option+F**) |
 | | Logs | opens the logs folder in Finder | |
 
