@@ -123,6 +123,27 @@ The owner played about 10 minutes from a recording and a log. What was wrong, an
    title); the "Save Game" text in the disc belongs to a debug menu ("Level Selector", "Cheats"). The Burrow has no save
    point; the save code is the same XAPI path as HP1's, where saving works.
 
+## 3c. After the owner's second play test (2026-11-23)
+
+1. **Saves did nothing.** A save scroll first tests the slot picked at New Game, `[0x51DF64]` (0x80EB0); at -1 ("started
+   without the save option") it plays its animation and returns. New Game sets it (0x101CA5, after the free-space check
+   `sub_00016D40`). The game systems' init `sub_0004ABF0` (from the game mode's init 0x34D00) sets it to -1; the owner's
+   game had saving off in Borgin & Burkes, after the Burrow's End Day. In play that reset now keeps the slot
+   (`HPCOS_KEEP_SLOT=0` off); every slot change is logged (`[save] slot`). Not yet confirmed at a scroll (a warp skips the
+   story, and the scroll does not appear). Retail has no save menu: autosave-free, scrolls only; "Continue" on the title
+   appears once a save exists (bit 0x10 of `[0x547030]`).
+2. **The boot/load stall, found.** The loaders' file-cache callbacks (`[0x1BE8C8]` boot, `[0x436F2C]` level) published
+   their next state, then released the request and stored its result (the file id). The release blocks on the cache's lock
+   while the main thread holds it to poll; the main thread saw the new state, read the previous file's id and seeked a
+   closed file (STATUS_INVALID_HANDLE, found by tracing the worker's list operations with each request's status). The 12
+   callbacks of that shape now store first and publish last (`HPCOS_LOADER_ORDER=0` off). Boots: 0 stalls in 36 short and
+   18 full (3 in 36 before). The handle table is also locked now.
+3. **Moving shadows**: with the camera held still the ground's dark patches still drift: the game's own cloud shadows.
+4. **Sticks**: no second dead zone on the left stick (the title has 0.35 and a run threshold); HP-COS's range compensation
+   (a push to 65 % reads as full, `RECOMP_STICK_RANGE`). The right stick keeps the radial dead zone.
+5. **Dev switches** for tests: `HPCOS_WARP=<level>[:start]` (the debug level selector's call; 4 Borgin & Burkes),
+   `HPCOS_POS_LOG`, `HPCOS_TP="x,z;..."`, `HPCOS_PAUSE_OPTS` (the pause menu's debug rows), `HPCOS_SAVE_LOG`.
+
 ## 4. Port features
 
 - **Settings menu** (the NFS ports' overlay): this game's rows in `engine/src/overlay/`. Pages: Display, Graphics, Audio, Input,
@@ -176,7 +197,7 @@ Debug switches added for this game:
 - **Saving and loading** are not tested. The game saves at story points; the tests did not reach one.
 - **Anything past the Burrow** is not tested.
 - **Widescreen:** 4:3 only. **PAL disc:** not supported.
-- **A stall at boot or a loading screen**, about 1 boot in 36 with 6 at once (3b, item 7): restart the game.
+- **Saving** is not confirmed yet (3c, item 1).
 - **The file-cache hold** makes the old 1-in-8 load hang rare, but it works around a timing difference between the console and
   this runtime. It is not a proven cure.
 

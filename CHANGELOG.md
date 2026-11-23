@@ -31,5 +31,8 @@ far; not released.
   title picture; Skip Cutscenes on a single press and about 30x (was 8x on paper, ~1.3x in practice); LB / RB are White / Black (were swapped); short presses are no
   longer lost; a crash at boot (a GPU callback overwritten before it ran) and the "disc is dirty" screen after skipping the intro
   fixed; load stalls rarer (1 boot in 36 in tests, open).
+- Second play test: save scrolls could do nothing (the save slot reset after End Day; now kept, still to confirm); the
+  boot / loading-screen stall's cause found and fixed (loader callbacks published their state before their result);
+  left stick without a second dead zone, with range compensation.
 - Known limits: saving and loading are not tested (the game saves by itself at story points; the Burrow has none); only the
-  Burrow and the start of the next chapter have been played; 4:3 only (no widescreen); the PAL disc is not supported; a rare stall at boot or a loading screen.
+  Burrow and the start of the next chapter have been played; 4:3 only (no widescreen); the PAL disc is not supported.

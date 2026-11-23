@@ -36,10 +36,9 @@ and the opening cutscene at the Burrow into free play there (Harry walks and cas
 and Ron), at 60 fps at 3x on an M1 Pro. The pause menu and the game's Options work, and there is sound.
 
 - It is an experiment, worked on when time allows; it is **not actively supported**.
-- **Saving and loading are not tested.** The game has no save menu: it saves by itself, to the slot picked at New Game, at
-  story points. The Burrow has none, and the tests did not get further.
+- **Saving and loading are not confirmed yet.** The game has no save menu: walk up to a SAVE GAME scroll and press A; it
+  saves to the slot picked at New Game, and "Continue" appears on the title once a save exists.
 - Only the Burrow and the start of the next chapter have been played.
-- A rare stall at boot or at a loading screen remains (about 1 boot in 36 in tests): restart the game if "loading" never ends.
 - **4:3 only** (no widescreen).
 - Apple Silicon and **macOS 15 or newer** only, and only the **Xbox USA disc** (the PAL edition is not supported).
 
