@@ -154,7 +154,7 @@ The owner played about 10 minutes from a recording and a log. What was wrong, an
 2. **Stub audit**: of the 46 stubs, only 0x4DD30 was a missed function (`tools/seedcheck.py` says "free"); the others are
    reached from duplicate or misdecoded copies of functions.
 3. **Short presses**: each press reaches the game for at least two reads (`RECOMP_PAD_MIN_READS`, default 2).
-4. **Moving shadows**: not a texgen or AO bug as far as tests show (same picture with AO on and off); open.
+4. **Moving shadows**: not a texgen or AO bug (same picture with AO on and off); found later, see 3f.
 
 ## 3e. After the owner's fourth play test (2026-11-23): one-sided Climb/Grab/Pull
 
@@ -169,6 +169,19 @@ The owner played about 10 minutes from a recording and a log. What was wrong, an
    19 loads, 4 stores in this game) with a unit test; after the relift every capture matches.
 3. Audit: the four game functions replaced outright are platform ones (memmove, the AC'97 reset, rumble, the cache
    worker's wait); every other override calls the original. No x87/SSE instruction is left as a TODO.
+
+
+## 3f. After the owner's fifth play test (2026-11-23): sliding shadows
+
+Controls confirmed. The "moving shadows" were the character shadow map's border. Each frame the game renders the
+characters' shadows into a 1024x1024 R5G6B5 target (836D4000 in Diagon Alley), cleared to grey, and every world draw
+samples it on stage 1 (projected, address mode 4 = border) with border colour `FF808080`. Metal has only transparent
+black, opaque black and opaque white borders; the old code picked white, so outside the map the world was lit at double
+brightness and the map's edges were dark bands that moved with Harry and the camera. Now `wrap_mode(4)` clamps to the
+edge and the fragment shader's `nv2a_samp()` returns the stage's `SET_TEXTURE_BORDER_COLOR` (`Nv2aMslFs.bc/bm`) when a
+coordinate is outside [0,1]. Found with `RECOMP_DRAW_LOG` (now prints `bc`) and `RECOMP_GL_DUMP_SURF=836D4000`; checked by
+painting the border red (the far floor through the arch) and by before/after dumps. Test with the owner's save:
+`build/t/gr1` (POTTER B, Continue → down → A).
 
 ## 4. Port features
 

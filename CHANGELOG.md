@@ -44,5 +44,9 @@ far; not released.
   comes from the stick through it, so with the stick pointing straight along an axis (pushing into a crate or wall) he
   faced the wrong way and the action's facing test failed. Found with a new differential test (`tools/difftest.py`:
   the original x86 run in Unicorn from a memory snapshot, compared with the lifted code).
+- Fifth play test: no more shadows sliding over walls and floors. Characters cast their shadows through a shadow map the
+  game draws each frame around Harry, with a grey border colour (its "no shadow" value). Metal samplers only have black
+  or white borders, so the port used white: everything outside the map was lit twice as bright, and the map's edges
+  showed as dark bands moving with the camera. The pixel shader now returns each stage's own border colour.
 - Known limits: only the Burrow, Diagon Alley and Borgin & Burkes have been played; 4:3 only (no widescreen); the PAL disc
   is not supported.

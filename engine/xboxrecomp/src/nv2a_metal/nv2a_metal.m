@@ -1600,7 +1600,7 @@ static MTLSamplerAddressMode wrap_mode(uint32_t m)
     switch (m) {
     case 2:  return MTLSamplerAddressModeMirrorRepeat;
     case 3:  return MTLSamplerAddressModeClampToEdge;
-    case 4:  return MTLSamplerAddressModeClampToZero;      /* border: transparent black */
+    case 4:  return MTLSamplerAddressModeClampToEdge;      /* border: the shader returns the stage's colour */
     case 5:  return MTLSamplerAddressModeClampToEdge;
     default: return MTLSamplerAddressModeRepeat;
     }
@@ -1617,16 +1617,6 @@ static id<MTLSamplerState> sampler_get(uint32_t key)
     d.sAddressMode = wrap_mode(key & 0xF);
     d.tAddressMode = wrap_mode((key >> 8) & 0xF);
     d.rAddressMode = MTLSamplerAddressModeRepeat;
-    /* hp1-xbox-port: border addressing with the stage's border colour, as
-     * near as Metal has (bits 28-29: 0 transparent black, 1 opaque black,
-     * 2 opaque white). HP1's floor shadows multiply with a white border;
-     * transparent black darkened the whole shadow quad. */
-    if (((key & 0xF) == 4 || ((key >> 8) & 0xF) == 4) && ((key >> 28) & 3)) {
-        if ((key & 0xF) == 4) d.sAddressMode = MTLSamplerAddressModeClampToBorderColor;
-        if (((key >> 8) & 0xF) == 4) d.tAddressMode = MTLSamplerAddressModeClampToBorderColor;
-        d.borderColor = ((key >> 28) & 3) == 2 ? MTLSamplerBorderColorOpaqueWhite
-                                               : MTLSamplerBorderColorOpaqueBlack;
-    }
     d.magFilter = (key & 0x10000) ? MTLSamplerMinMagFilterNearest : MTLSamplerMinMagFilterLinear;
     d.minFilter = (key & 0x20000) ? MTLSamplerMinMagFilterNearest : MTLSamplerMinMagFilterLinear;
     /* Only replaced (HD) textures have mips; the game's own have one level. */
@@ -1783,11 +1773,6 @@ static void bind_stage(const uint32_t *regs, int i, float scale[2], __strong id<
     addr = regs[base + 2];
     filter = regs[base + 5];
     key = (addr & 0xF0F);
-    if ((addr & 0xF) == 4 || ((addr >> 8) & 0xF) == 4) {
-        uint32_t bc = regs[base + 9];           /* SET_TEXTURE_BORDER_COLOR, ARGB */
-        if ((bc >> 24) >= 0x80)
-            key |= ((bc & 0xFFFFFFu) >= 0x808080u ? 2u : 1u) << 28;
-    }
     if (((filter >> 24) & 0xF) == 1) key |= 0x10000;
     if (((filter >> 16) & 0xFF) == 1) key |= 0x20000;
     {
@@ -3476,8 +3461,8 @@ static void mtl_draw_raw_inner(const Nv2aRawBatch *b)
             for (k = 0; k < 4; k++) {
                 uint32_t base = (0x1B00u + k * 0x40u) / 4;
                 if (r[base + 3] & 0x40000000u)
-                    fprintf(stderr, " | t%u fmt %08X rect %08X addr %08X gen %X%X%X%X mtx %u", k, r[base + 1], r[base + 7],
-                            r[base + 2], r[(0x3C0 + k * 16) / 4], r[(0x3C4 + k * 16) / 4], r[(0x3C8 + k * 16) / 4],
+                    fprintf(stderr, " | t%u fmt %08X rect %08X addr %08X bc %08X gen %X%X%X%X mtx %u", k, r[base + 1], r[base + 7],
+                            r[base + 2], r[base + 9], r[(0x3C0 + k * 16) / 4], r[(0x3C4 + k * 16) / 4], r[(0x3C8 + k * 16) / 4],
                             r[(0x3CC + k * 16) / 4], r[(0x420 + k * 4) / 4]);
             }
             for (k = 0; k < 4; k += 3) {
@@ -3731,6 +3716,15 @@ static void mtl_draw_raw_inner(const Nv2aRawBatch *b)
         for (i = 0; i < 4; i++) {
             fb.tscale[i][0] = tscale[i][0];
             fb.tscale[i][1] = tscale[i][1];
+            {   /* border addressing in the shader, with the stage's colour (hpcos-xbox-port) */
+                uint32_t base = (0x1B00u + (uint32_t)i * 0x40u) / 4, a = r[base + 2];
+                fb.bm[i] = ((a & 0xF) == 4 ? 1 : 0) | (((a >> 8) & 0xF) == 4 ? 2 : 0);
+                if (fb.bm[i]) {
+                    uint32_t bc = r[base + 9];
+                    fb.bc[i][0] = byte_f(bc, 16); fb.bc[i][1] = byte_f(bc, 8);
+                    fb.bc[i][2] = byte_f(bc, 0);  fb.bc[i][3] = byte_f(bc, 24);
+                }
+            }
         }
         for (i = 0; i < 8; i++) {
             argb_vec4(r[0xA60 / 4 + i], fb.c0[i]);
