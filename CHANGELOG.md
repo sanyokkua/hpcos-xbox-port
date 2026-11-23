@@ -39,5 +39,10 @@ far; not released.
   lifted: a save is written (`game/UDATA/4541000e/…/POTTER A`) and Continue on the title loads it (tested: save in the
   Burrow, Continue → "Potter A – The Burrow"). A new disc import keeps the saves. Every press reaches the game for at least
   two reads (~33 ms; `RECOMP_PAD_MIN_READS`).
-- Known limits: only the Burrow, Diagon Alley and Borgin & Burkes have been played; a box in the alley behind Borgin &
-  Burkes would not move for the owner (not reproduced yet); 4:3 only (no widescreen); the PAL disc is not supported.
+- Fourth play test: Climb, Grab and Pull now come up from every side. The lifter read 80-bit floats (`fld tbyte`) as
+  4-byte ones, so the C runtime's asin/acos returned about 0 instead of ±π/2 for an argument of exactly ±1. Harry's heading
+  comes from the stick through it, so with the stick pointing straight along an axis (pushing into a crate or wall) he
+  faced the wrong way and the action's facing test failed. Found with a new differential test (`tools/difftest.py`:
+  the original x86 run in Unicorn from a memory snapshot, compared with the lifted code).
+- Known limits: only the Burrow, Diagon Alley and Borgin & Burkes have been played; 4:3 only (no widescreen); the PAL disc
+  is not supported.

@@ -156,6 +156,20 @@ The owner played about 10 minutes from a recording and a log. What was wrong, an
 3. **Short presses**: each press reaches the game for at least two reads (`RECOMP_PAD_MIN_READS`, default 2).
 4. **Moving shadows**: not a texgen or AO bug as far as tests show (same picture with AO on and off); open.
 
+## 3e. After the owner's fourth play test (2026-11-23): one-sided Climb/Grab/Pull
+
+1. **Differential test** (`tools/difftest.py`, needs `pip install unicorn` in `.venv`): `HPCOS_DIFF_DIR=<dir>
+   HPCOS_DIFF_AT="n,..."` dumps registers, x87 state and guest memory around those calls of Harry's update
+   (`sub_00053710`); the script runs the original bytes from the "pre" dump in Unicorn and compares with "post".
+   `DIFF_WATCH=<va>` prints the instruction that writes an address, `DIFF_TRACE=<file>` the block path. Writes by other
+   threads during the call show as "written by lifted" noise (thread stacks, timers).
+2. **Bug**: Harry's heading from the stick (0x62C74 → `sub_00036E10` → the CRT's asin at 0x12767C) came out 90° off when
+   the stick pointed straight along an axis: asin(±1) loads π/2 with `fld xword ptr [0x21336E]`, which the lifter read as
+   a 4-byte float (≈ 0). Fixed in the lifter (`fld`/`fstp` m80 → `recomp_ld_f80` / `recomp_st_f80` in `recomp_types.h`;
+   19 loads, 4 stores in this game) with a unit test; after the relift every capture matches.
+3. Audit: the four game functions replaced outright are platform ones (memmove, the AC'97 reset, rumble, the cache
+   worker's wait); every other override calls the original. No x87/SSE instruction is left as a TODO.
+
 ## 4. Port features
 
 - **Settings menu** (the NFS ports' overlay): this game's rows in `engine/src/overlay/`. Pages: Display, Graphics, Audio, Input,
