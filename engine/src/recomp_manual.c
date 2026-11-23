@@ -874,6 +874,64 @@ void sub_00134D70(void)
  * { wButtons, bAnalogButtons[8], sThumbLX, LY, RX, RY } -- the USB report's
  * bytes 2..19 laid out the same way. The packet number moves only on a
  * change, as XAPI's does. HPCOS_PAD_LOG=1 logs every change. */
+/* HPCOS_PAD_REPLAY=<log>,<from_ms>,<after_ms>: replays a play-test's [pad] lines (a
+ * last.log) for reproducing what the player did: <after_ms> after the first pad read,
+ * the pad takes the logged states from log time <from_ms> on, at their own pace. */
+typedef struct { uint64_t t; uint8_t r[18]; } PadRec;
+static PadRec *s_rp;
+static size_t s_rp_n, s_rp_at;
+static uint64_t s_rp_from, s_rp_after, s_rp_t0;
+
+static void pad_replay(uint8_t *rep)
+{
+    static int init;
+    if (!init) {
+        const char *e = getenv("HPCOS_PAD_REPLAY");
+        char path[1024], line[512];
+        FILE *f;
+        size_t cap = 0;
+        init = 1;
+        if (!e || sscanf(e, "%1023[^,],%llu,%llu", path, (unsigned long long *)&s_rp_from,
+                         (unsigned long long *)&s_rp_after) != 3 || !(f = fopen(path, "r")))
+            return;
+        while (fgets(line, sizeof line, f)) {
+            unsigned long long t; unsigned port, b, a[8]; int lx, ly, rx, ry, k;
+            if (sscanf(line, "[pad] %llu ms port %u buttons %x analog %x %x %x %x %x %x %x %x LX %d LY %d RX %d RY %d",
+                       &t, &port, &b, &a[0], &a[1], &a[2], &a[3], &a[4], &a[5], &a[6], &a[7],
+                       &lx, &ly, &rx, &ry) != 15 || port != 0 || t < s_rp_from)
+                continue;
+            if (s_rp_n == cap) { cap = cap ? cap * 2 : 4096; s_rp = realloc(s_rp, cap * sizeof *s_rp); }
+            PadRec *p = &s_rp[s_rp_n++];
+            memset(p, 0, sizeof *p);
+            p->t = t - s_rp_from;
+            p->r[0] = (uint8_t)b;
+            for (k = 0; k < 8; k++) p->r[2 + k] = (uint8_t)a[k];
+            int16_t s[4] = { (int16_t)lx, (int16_t)ly, (int16_t)rx, (int16_t)ry };
+            memcpy(p->r + 10, s, 8);
+        }
+        fclose(f);
+        fprintf(stderr, "[replay] %zu pad states from %llu ms, %llu ms after the first read\n",
+                s_rp_n, (unsigned long long)s_rp_from, (unsigned long long)s_rp_after);
+    }
+    if (!s_rp_n)
+        return;
+    uint64_t now = ff_now_ms();
+    if (!s_rp_t0) s_rp_t0 = now;
+    if (now - s_rp_t0 < s_rp_after)
+        return;
+    uint64_t t = now - s_rp_t0 - s_rp_after;
+    if (s_rp_at == 0 && t < s_rp[0].t)
+        return;
+    while (s_rp_at + 1 < s_rp_n && s_rp[s_rp_at + 1].t <= t)
+        s_rp_at++;
+    if (s_rp_at + 1 == s_rp_n && t > s_rp[s_rp_at].t + 2000) {
+        static int done;
+        if (!done) { done = 1; fprintf(stderr, "[replay] end at %llu ms\n", (unsigned long long)t); }
+        return;
+    }
+    memcpy(rep + 2, s_rp[s_rp_at].r, 18);
+}
+
 extern void sub_0017743B_gen(void);
 void sub_0017743B(void)
 {
@@ -883,6 +941,8 @@ void sub_0017743B(void)
     if (i == -2) { sub_0017743B_gen(); return; }
     int have = i >= 0 && usb_gamepad_connected((int)s_xi[i].port)
             && usb_gamepad_report((int)s_xi[i].port, rep, (int)sizeof rep) >= 20;
+    if (have)
+        pad_replay(rep);
     if (have)
         rep[2] = cutscene_ff_pad(rep[2]);
     if (i < 0) {
@@ -1046,6 +1106,24 @@ recomp_func_t recomp_lookup_manual(uint32_t xbox_va)
 
 /* ── ICALL failure logging ─────────────────────────────────── */
 
+#include <execinfo.h>
+
+/* hpcos-xbox-port: the first wild calls name their caller. A burst of them means a
+ * list or object holds garbage; the lifted functions on the host stack say which
+ * one walked it (the ring of targets alone does not). */
+static void icall_fail_backtrace(void)
+{
+    static int printed;
+    void *frames[10];
+    int n;
+    if (printed >= 6)
+        return;
+    printed++;
+    n = backtrace(frames, 10);
+    fprintf(stderr, "  called from:\n");
+    backtrace_symbols_fd(frames + 2, n > 2 ? n - 2 : 0, 2);
+}
+
 /*
  * Called when RECOMP_ICALL cannot resolve a target address.
  * This usually means one of:
@@ -1069,6 +1147,7 @@ void recomp_icall_fail_log(uint32_t va)
         if (g_icall_trace[idx])
             fprintf(stderr, "    [%2d] 0x%08X\n", i, g_icall_trace[idx]);
     }
+    icall_fail_backtrace();
     fflush(stderr);
 }
 
@@ -1115,6 +1194,7 @@ void recomp_icall_not_code_log(uint32_t va)
                     "(null or wild function pointer, at call #%llu)\n",
             va, (unsigned long long)hits[i],
             (unsigned long long)g_icall_count);
+    icall_fail_backtrace();
     fflush(stderr);
 }
 
