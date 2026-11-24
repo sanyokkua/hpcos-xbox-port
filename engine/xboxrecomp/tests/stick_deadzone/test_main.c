@@ -46,6 +46,31 @@ int main(void)
     x = 20000; y = -10000; stick_deadzone(&x, &y, STICK_DEADZONE);
     CHECK(x > 0 && y < 0 && abs(x - 2 * -y) <= 2, "direction kept: %d %d", x, y);
 
+    /* Range compensation, learned per direction (RECOMP_STICK_RANGE unset). */
+    {
+        float reach[8] = { 0 };
+        int16_t a, b;
+        /* A pad that reaches full tilt keeps its analog travel: half a push stays half. */
+        a = 32767; b = 0; stick_range_at(&a, &b, reach, 0.0);
+        CHECK(a == 32767 && b == 0, "full push stays full: %d %d", a, b);
+        a = 16384; b = 0; stick_range_at(&a, &b, reach, 0.0);
+        CHECK(a == 16384, "half push after a full one stays half (was stretched to %d)", a);
+        /* A pad that falls short (0.67 straight back) is stretched to full there only. */
+        a = 0; b = -21900; stick_range_at(&a, &b, reach, 0.0);
+        CHECK(a == 0 && b <= -32700, "short direction stretched to full: %d %d", a, b);
+        a = 0; b = -10950; stick_range_at(&a, &b, reach, 0.0);
+        CHECK(b < -16000 && b > -16700, "half of the short range is half: %d", b);
+        /* Before anything is learned the reach is at least 0.60: a small push is not blown up. */
+        float fresh[8] = { 0 };
+        a = 0; b = 6000; stick_range_at(&a, &b, fresh, 0.0);
+        CHECK(b > 9000 && b < 10500, "first small push scaled by 1/0.6 at most: %d", b);
+        /* Fixed range (RECOMP_STICK_RANGE=0.65) as before; 1 = off. */
+        a = 21299; b = 0; stick_range_at(&a, &b, fresh, 0.65);
+        CHECK(a >= 32700, "fixed 0.65: %d", a);
+        a = 16384; b = 0; stick_range_at(&a, &b, fresh, 1.0);
+        CHECK(a == 16384, "off: %d", a);
+    }
+
     if (failures) { printf("%d failure(s)\n", failures); return 1; }
     printf("stick_deadzone: all checks passed\n");
     return 0;

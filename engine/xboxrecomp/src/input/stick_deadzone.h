@@ -31,26 +31,54 @@ static inline void stick_deadzone(int16_t *x, int16_t *y, int zone)
     *y = (int16_t)(ny > 32767.0 ? 32767 : ny < -32767.0 ? -32767 : lrint(ny));
 }
 
-/* Range compensation (after HP-COS-Xbox-Recomp, MIT): deflection at RECOMP_STICK_RANGE
- * of full (default 0.65; 1 = off) reads as full, scaled radially so the direction stays. */
+/* Range compensation (after HP-COS-Xbox-Recomp and HP-POA-Xbox-Recomp, MIT; facts only): some pads fall short of
+ * full tilt in a direction (one read -21900 held straight back), and the character walked where it should run.
+ * Learned (the default, RECOMP_STICK_RANGE unset): each of 8 directions keeps the furthest the stick has reached
+ * there (at least 0.60, at most 1) and a reading is scaled by its direction's reach, radially, so a pad that reaches
+ * full tilt keeps its whole travel (the titles' slow walk, walk and run speeds) and a short one is stretched to full
+ * where it falls short. A fixed fraction (RECOMP_STICK_RANGE=0.65: a push to 65 % reads as full) was the default
+ * before: on a pad that reaches full tilt it made 92 % of a play test's stick readings full, and the walking range
+ * a third of the travel (hppoa-xbox-port, PLAYTEST1 #5). RECOMP_STICK_RANGE=1 is off. */
 #include <stdlib.h>
-static inline void stick_range(int16_t *x, int16_t *y)
+static inline void stick_range_at(int16_t *x, int16_t *y, float reach[8], double fixed)
 {
-    static double range = -1.0;
-    double fx = *x / 32767.0, fy = *y / 32767.0, m, s;
-    if (range < 0.0) {
-        const char *e = getenv("RECOMP_STICK_RANGE");
-        range = e && *e ? atof(e) : 0.65;
-        if (range <= 0.05 || range > 1.0) range = 1.0;
-    }
-    if (range >= 1.0) return;
+    double fx = *x / 32767.0, fy = *y / 32767.0, m, r, s;
+    if (fixed >= 1.0) return;
     m = sqrt(fx * fx + fy * fy);
     if (m <= 0.0) return;
-    s = 1.0 / range;
+    if (fixed > 0.0) {
+        r = fixed;
+    } else {
+        int sec = ((int)lrint(atan2(fy, fx) / 0.7853981634) + 8) & 7;
+        if (reach[sec] < 0.60f) reach[sec] = 0.60f;
+        if (m > reach[sec]) reach[sec] = m > 1.0 ? 1.0f : (float)m;
+        r = reach[sec];
+    }
+    s = 1.0 / r;
     if (m * s > 1.0) s = 1.0 / m;       /* onto the unit circle */
     fx *= s; fy *= s;
     *x = (int16_t)lrint((fx > 1.0 ? 1.0 : fx < -1.0 ? -1.0 : fx) * 32767.0);
     *y = (int16_t)lrint((fy > 1.0 ? 1.0 : fy < -1.0 ? -1.0 : fy) * 32767.0);
+}
+
+/* The setting: 0 = learned, a fraction = fixed, 1 = off. */
+static inline double stick_range_setting(void)
+{
+    static double range = -1.0;
+    if (range < 0.0) {
+        const char *e = getenv("RECOMP_STICK_RANGE");
+        range = e && *e ? atof(e) : 0.0;
+        if (range > 1.0 || (range > 0.0 && range <= 0.05)) range = 1.0;
+        if (range < 0.0) range = 0.0;
+    }
+    return range;
+}
+
+/* The left stick of pad `port` (0..3). */
+static inline void stick_range(int16_t *x, int16_t *y, int port)
+{
+    static float reach[4][8];
+    stick_range_at(x, y, reach[port & 3], stick_range_setting());
 }
 
 #endif

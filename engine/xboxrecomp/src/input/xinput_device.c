@@ -479,11 +479,11 @@ static DWORD input_get_state(DWORD dwPort, XBOX_INPUT_STATE *pState)
     {   /* Pads rest off centre: a radial dead zone (stick_deadzone.h) on the right stick.
          * hpcos-xbox-port: the left stick (Harry) has the title's own dead zone (0.35)
          * and run threshold; a second one on top made small pushes dead and then jump.
-         * Instead, HP-COS-Xbox-Recomp's range compensation: a push to 65 % counts as full
-         * (RECOMP_STICK_RANGE, 1 = off), so pads with a short range still run. */
+         * Instead, range compensation learned per direction (stick_deadzone.h; RECOMP_STICK_RANGE=<fraction>
+         * fixes it, 1 = off), so pads with a short range still run and full-range pads keep their walk. */
         int16_t lx = pState->Gamepad.sThumbLX, ly = pState->Gamepad.sThumbLY;
         int16_t rx = pState->Gamepad.sThumbRX, ry = pState->Gamepad.sThumbRY;
-        stick_range(&lx, &ly);
+        stick_range(&lx, &ly, (int)dwPort);
         stick_deadzone(&rx, &ry, STICK_DEADZONE);
         pState->Gamepad.sThumbLX = lx; pState->Gamepad.sThumbLY = ly;
         pState->Gamepad.sThumbRX = rx; pState->Gamepad.sThumbRY = ry;
