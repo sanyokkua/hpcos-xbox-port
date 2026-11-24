@@ -617,6 +617,21 @@ static void entity_list_check(void)
         where = ent;
     }
     if (!why && steps >= 4096u) why = "entity chain loops";
+    /* The per-frame updates (sub_00042F00 / sub_00042F70) walk the pool by index and call
+     * +0x74 of every live slot: a live slot's handlers must be code or null. */
+    if (!why && n <= 4096u) {
+        for (uint32_t k = 0; k < n; k++) {
+            uint32_t e = pool + k * 0xDCu, h;
+            if (!(MEM32(e) & 1u)) continue;
+            for (uint32_t off = 0x70; off <= 0x78; off += 4) {
+                h = MEM32(e + off);
+                if (h && (h < 0x11000u || h >= 0x130620u)) {
+                    why = "live pool slot with a handler outside code"; bad = h; where = e; break;
+                }
+            }
+            if (why) break;
+        }
+    }
     if (!why) return;
     reported++;
     fprintf(stderr, "[entity] list broken: %s: %08X (after/in entity %08X), pool %08X x%u\n",
@@ -661,6 +676,13 @@ static int ff_enabled(void)
 {
     const char *e = getenv("HPCOS_SKIP_CUTSCENES");
     return !(e && *e == '0');
+}
+/* Dev: HPCOS_FF_AUTO=1 skips every cutscene as it starts, as a Start press would. */
+static int ff_auto(void)
+{
+    static int v = -1;
+    if (v < 0) { const char *e = getenv("HPCOS_FF_AUTO"); v = e && *e == '1'; }
+    return v;
 }
 static void ff_set(int on)
 {
@@ -899,7 +921,7 @@ static uint8_t cutscene_ff_pad(uint8_t buttons)
         ended = 0;                      /* the next part of a cutscene in two goes on fast too */
         ff_since = now;
         ff_set(1);
-    } else if (cut && press && ff_enabled()) {
+    } else if (cut && (press || ff_auto()) && ff_enabled()) {
         ff_since = now;
         hidden |= press;
         ff_set(1);
@@ -1005,7 +1027,25 @@ static void pad_replay(uint8_t *rep)
     if (!s_rp_n)
         return;
     uint64_t now = ff_now_ms();
-    if (!s_rp_t0) s_rp_t0 = now;
+    /* HPCOS_REPLAY_AT_WARP=1: the clock starts when the level HPCOS_WARP loaded is in
+     * play (camera mode 0 and Harry's entity, 500 ms in a row), not at the first read:
+     * from_ms is then the matching moment of the play-test (its load's end). */
+    if (!s_rp_t0) {
+        static int at_warp = -1;
+        static uint64_t ok_since;
+        if (at_warp < 0) { const char *e = getenv("HPCOS_REPLAY_AT_WARP"); at_warp = e && *e == '1'; }
+        if (at_warp) {
+            uint32_t ent = MEM32(0x00530408u);
+            if (!s_warp_at || now - s_warp_at < 1000 || MEM32(CAMERA_MODE) != 0u || !ent || !MEM32(ent + 0xAC)) {
+                ok_since = 0;
+                return;
+            }
+            if (!ok_since) ok_since = now;
+            if (now - ok_since < 500) return;
+            fprintf(stderr, "[replay] level in play: replay starts\n");
+        }
+        s_rp_t0 = now;
+    }
     if (now - s_rp_t0 < s_rp_after)
         return;
     uint64_t t = now - s_rp_t0 - s_rp_after;
@@ -1200,6 +1240,36 @@ recomp_func_t recomp_lookup_manual(uint32_t xbox_va)
 /* hpcos-xbox-port: the first wild calls name their caller. A burst of them means a
  * list or object holds garbage; the lifted functions on the host stack say which
  * one walked it (the ring of targets alone does not). */
+/* The guest side of a wild call: its return address (the call site) and where the
+ * target sits in the entity pool, if it does. */
+static void icall_wild_context(uint32_t va)
+{
+    static int printed;
+    uint32_t pool = MEM32(0x00524304u), n = (uint32_t)(int32_t)(int16_t)MEM16(0x0052455Eu);
+    if (printed >= 4) return;
+    printed++;
+    fprintf(stderr, "  guest call site: return to %08X; eax %08X ecx %08X edx %08X ebx %08X esi %08X edi %08X\n",
+            MEM32(g_esp), g_eax, g_ecx, g_edx, g_ebx, g_esi, g_edi);
+    fprintf(stderr, "  entity pool %08X, slots %d..%u\n", pool, (int)(int16_t)MEM16(0x0052455Cu), n);
+    fprintf(stderr, "  last indirect targets (oldest first):");
+    for (int i = 0; i < 16; i++) {
+        uint32_t t = g_icall_trace[(g_icall_trace_idx - 16 + i) & (ICALL_TRACE_SIZE - 1)];
+        fprintf(stderr, " %08X", t);
+    }
+    fprintf(stderr, "\n");
+    if (!guest_ptr_ok(pool) || n > 4096u) return;
+    for (uint32_t k = 0; k < n; k++) {
+        uint32_t e = pool + k * 0xDCu;
+        for (uint32_t off = 0; off < 0xDCu; off += 4)
+            if (MEM32(e + off) == va) {
+                fprintf(stderr, "  found in slot %u (%08X) +0x%02X; slot:", k, e, off);
+                for (uint32_t q = 0; q < 0xDCu; q += 4) fprintf(stderr, "%s%08X", q % 32 ? " " : "\n    ", MEM32(e + q));
+                fprintf(stderr, "\n");
+                return;
+            }
+    }
+}
+
 static void icall_fail_backtrace(void)
 {
     static int printed;
@@ -1236,6 +1306,7 @@ void recomp_icall_fail_log(uint32_t va)
         if (g_icall_trace[idx])
             fprintf(stderr, "    [%2d] 0x%08X\n", i, g_icall_trace[idx]);
     }
+    icall_wild_context(va);
     icall_fail_backtrace();
     fflush(stderr);
 }
@@ -1283,6 +1354,7 @@ void recomp_icall_not_code_log(uint32_t va)
                     "(null or wild function pointer, at call #%llu)\n",
             va, (unsigned long long)hits[i],
             (unsigned long long)g_icall_count);
+    icall_wild_context(va);
     icall_fail_backtrace();
     fflush(stderr);
 }

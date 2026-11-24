@@ -966,5 +966,193 @@
  {
   "start": "0x0004DD30",
   "note": "save request: copies the game state into the save slot and pushes the save-game mode (0x1E8058); called by the SAVE GAME scroll, missed by the lifter (no direct call, falls after data)"
+ },
+ {
+  "start": "0x00017FA6",
+  "note": "shared tail / jump target the disassembler missed (was an empty stub); in HP-COS-Xbox-Recomp function list"
+ },
+ {
+  "start": "0x00018634",
+  "note": "shared tail / jump target the disassembler missed (was an empty stub); in HP-COS-Xbox-Recomp function list"
+ },
+ {
+  "start": "0x0002FE50",
+  "note": "shared tail / jump target the disassembler missed (was an empty stub); in HP-COS-Xbox-Recomp function list"
+ },
+ {
+  "start": "0x0002FE80",
+  "note": "shared tail / jump target the disassembler missed (was an empty stub); in HP-COS-Xbox-Recomp function list"
+ },
+ {
+  "start": "0x00048000",
+  "note": "shared tail / jump target the disassembler missed (was an empty stub); in HP-COS-Xbox-Recomp function list"
+ },
+ {
+  "start": "0x000505AA",
+  "note": "shared tail / jump target the disassembler missed (was an empty stub); in HP-COS-Xbox-Recomp function list"
+ },
+ {
+  "start": "0x0006F020",
+  "note": "shared tail / jump target the disassembler missed (was an empty stub); in HP-COS-Xbox-Recomp function list"
+ },
+ {
+  "start": "0x00072510",
+  "note": "shared tail / jump target the disassembler missed (was an empty stub); in HP-COS-Xbox-Recomp function list"
+ },
+ {
+  "start": "0x000945BF",
+  "note": "shared tail / jump target the disassembler missed (was an empty stub); in HP-COS-Xbox-Recomp function list"
+ },
+ {
+  "start": "0x000945C9",
+  "note": "shared tail / jump target the disassembler missed (was an empty stub); in HP-COS-Xbox-Recomp function list"
+ },
+ {
+  "start": "0x000A50F5",
+  "note": "shared tail / jump target the disassembler missed (was an empty stub); in HP-COS-Xbox-Recomp function list"
+ },
+ {
+  "start": "0x000A8700",
+  "note": "shared tail / jump target the disassembler missed (was an empty stub); in HP-COS-Xbox-Recomp function list"
+ },
+ {
+  "start": "0x000CF817",
+  "note": "shared tail / jump target the disassembler missed (was an empty stub); in HP-COS-Xbox-Recomp function list"
+ },
+ {
+  "start": "0x000E3DF7",
+  "note": "shared tail / jump target the disassembler missed (was an empty stub); in HP-COS-Xbox-Recomp function list"
+ },
+ {
+  "start": "0x000E3E08",
+  "note": "shared tail / jump target the disassembler missed (was an empty stub); in HP-COS-Xbox-Recomp function list"
+ },
+ {
+  "start": "0x000ECF2B",
+  "note": "shared tail / jump target the disassembler missed (was an empty stub); in HP-COS-Xbox-Recomp function list"
+ },
+ {
+  "start": "0x000F0C61",
+  "note": "shared tail / jump target the disassembler missed (was an empty stub); in HP-COS-Xbox-Recomp function list"
+ },
+ {
+  "start": "0x0010432C",
+  "note": "shared tail / jump target the disassembler missed (was an empty stub); in HP-COS-Xbox-Recomp function list"
+ },
+ {
+  "start": "0x001046B1",
+  "note": "shared tail / jump target the disassembler missed (was an empty stub); in HP-COS-Xbox-Recomp function list"
+ },
+ {
+  "start": "0x001046B2",
+  "note": "shared tail / jump target the disassembler missed (was an empty stub); in HP-COS-Xbox-Recomp function list"
+ },
+ {
+  "start": "0x001074FA",
+  "note": "shared tail / jump target the disassembler missed (was an empty stub); in HP-COS-Xbox-Recomp function list"
+ },
+ {
+  "start": "0x0010FFF7",
+  "note": "shared tail / jump target the disassembler missed (was an empty stub); in HP-COS-Xbox-Recomp function list"
+ },
+ {
+  "start": "0x00110004",
+  "note": "shared tail / jump target the disassembler missed (was an empty stub); in HP-COS-Xbox-Recomp function list"
+ },
+ {
+  "start": "0x001205E4",
+  "note": "shared tail / jump target the disassembler missed (was an empty stub); in HP-COS-Xbox-Recomp function list"
+ },
+ {
+  "start": "0x001290D6",
+  "note": "shared tail / jump target the disassembler missed (was an empty stub); in HP-COS-Xbox-Recomp function list"
+ },
+ {
+  "start": "0x00129190",
+  "note": "shared tail / jump target the disassembler missed (was an empty stub); in HP-COS-Xbox-Recomp function list"
+ },
+ {
+  "start": "0x001292ED",
+  "note": "shared tail / jump target the disassembler missed (was an empty stub); in HP-COS-Xbox-Recomp function list"
+ },
+ {
+  "start": "0x0012BF52",
+  "note": "shared tail / jump target the disassembler missed (was an empty stub); in HP-COS-Xbox-Recomp function list"
+ },
+ {
+  "start": "0x0012EB98",
+  "note": "shared tail / jump target the disassembler missed (was an empty stub); in HP-COS-Xbox-Recomp function list"
+ },
+ {
+  "start": "0x0012EC01",
+  "note": "shared tail / jump target the disassembler missed (was an empty stub); in HP-COS-Xbox-Recomp function list"
+ },
+ {
+  "start": "0x000ECF14",
+  "note": "shared tail / jump target the disassembler missed (was an empty stub); in HP-COS-Xbox-Recomp function list"
+ },
+ {
+  "start": "0x000187B3",
+  "note": "jump target the disassembler missed (was an empty stub)"
+ },
+ {
+  "start": "0x0003036F",
+  "note": "jump target the disassembler missed (was an empty stub)"
+ },
+ {
+  "start": "0x00050956",
+  "note": "jump target the disassembler missed (was an empty stub)"
+ },
+ {
+  "start": "0x000A893E",
+  "note": "jump target the disassembler missed (was an empty stub)"
+ },
+ {
+  "start": "0x000B5816",
+  "note": "jump target the disassembler missed (was an empty stub)"
+ },
+ {
+  "start": "0x000E7915",
+  "note": "jump target the disassembler missed (was an empty stub)"
+ },
+ {
+  "start": "0x0011000C",
+  "note": "jump target the disassembler missed (was an empty stub)"
+ },
+ {
+  "start": "0x001102AA",
+  "note": "jump target the disassembler missed (was an empty stub)"
+ },
+ {
+  "start": "0x001102B9",
+  "note": "jump target the disassembler missed (was an empty stub)"
+ },
+ {
+  "start": "0x0012232A",
+  "note": "jump target the disassembler missed (was an empty stub)"
+ },
+ {
+  "start": "0x0012932A",
+  "note": "jump target the disassembler missed (was an empty stub)"
+ },
+ {
+  "start": "0x000187B5",
+  "note": "jump target the disassembler missed (was an empty stub)"
+ },
+ {
+  "start": "0x000B593D",
+  "note": "jump target the disassembler missed (was an empty stub)"
+ },
+ {
+  "start": "0x0005096D",
+  "note": "jump target the disassembler missed (was an empty stub)"
+ },
+ {
+  "start": "0x00050977",
+  "note": "jump target the disassembler missed (was an empty stub)"
+ },
+ {
+  "start": "0x00050935",
+  "note": "jump target the disassembler missed (was an empty stub)"
  }
 ]
