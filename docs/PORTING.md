@@ -140,7 +140,7 @@ The owner played about 10 minutes from a recording and a log. What was wrong, an
    18 full (3 in 36 before). The handle table is also locked now.
 3. **Moving shadows**: with the camera held still the ground's dark patches still drift: the game's own cloud shadows.
 4. **Sticks**: no second dead zone on the left stick (the title has 0.35 and a run threshold); HP-COS's range compensation
-   (a push to 65 % reads as full, `RECOMP_STICK_RANGE`). The right stick keeps the radial dead zone.
+   (since 3h: learned per direction, `RECOMP_STICK_RANGE=<fraction>` fixes it at the old 0.65 behaviour, 1 = off). The right stick keeps the radial dead zone.
 5. **Dev switches** for tests: `HPCOS_WARP=<level>[:start]` (the debug level selector's call; 4 Borgin & Burkes),
    `HPCOS_POS_LOG`, `HPCOS_TP="x,z;..."`, `HPCOS_PAUSE_OPTS` (the pause menu's debug rows), `HPCOS_SAVE_LOG`.
 
@@ -239,6 +239,18 @@ Three fixes hppoa-xbox-port found (its `7b59edc`, `c053b83`, `79c7af5`); none ch
 3. **`tools/stubcheck.py`**: range `0x11000..0x17DA80` (`.text` plus D3D, D3DX, XGRPH, DSOUND, XMV, XPP), bytes past a section's raw data
    are data. Before, the stubs in the XDK sections were classed "data" without a look. Result: 13 stubs, 0 real code, nothing seeded.
    Smoke (`tools/smoke.sh 60`): OK before (4 frames, mean 77) and after (4 frames, mean 68).
+
+### 3h, round 2 (Unreleased)
+
+4. **Metal shaders as MSL 3.0** (`nv2a_metal.m`; `RECOMP_MTL_LANG=<maj>.<min>`, 0 = Metal's default). Log: `[MTL] shader language 3.0`, no
+   `shader failed` or `pipeline creation failed` line. hppoa measured a combiner shader at 540 ms (default) vs 43 ms (3.0). Not reproduced
+   here: the smoke route (`tools/smoke.sh 90`, fresh HOME, 2 runs each, default here is MSL 4.0) has the same hitches with both (a 350-520 ms one
+   at frame ~1247 with 0 ms of pipelines, so not a shader compile) because Metal's compile cache is warm after the first run; only the very
+   first 3.0 run showed 12 programs / 22 pipelines in one 617 ms frame (233 ms pipelines). The hitch log now also counts pipelines. A cold-cache
+   play route is still needed to confirm the gain.
+5. **`tools/immscan.py`** (from hppoa, plus the XMV section this XBE has): 310 immediates into code, 0 missed functions, as before.
+6. **Learned stick range** (`stick_deadzone.h`): 8 directions each keep the furthest reach seen (at least 0.60, at most 1), radial scaling by it.
+   Tests in `engine/xboxrecomp/tests/stick_deadzone` (all pass). The executor's inline fixed-function change is not taken (still being checked in PoA).
 
 ## 4. Port features
 

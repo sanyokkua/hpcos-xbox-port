@@ -8,6 +8,9 @@ Engine and tool fixes backported from the Prisoner of Azkaban port (no change to
   Relift of this disc: `functions.json` identical (6,131 starts).
 - Kernel: `ExQueryNonVolatileSetting` answers `XC_FACTORY_AV_REGION` (0x103) as NTSC-M (0x00400100), matching the fixed North America game region.
 - `tools/stubcheck.py` also covers the XDK code sections; bytes past a section's raw size count as data. This disc: 13 stubs, 0 real code.
+- Metal shaders compile as MSL 3.0 (`RECOMP_MTL_LANG` overrides); the hitch log counts pipelines.
+- Stick range compensation learned per direction instead of a fixed 0.65 (a 65 % push no longer reads as full; `RECOMP_STICK_RANGE=0.65` restores it).
+- `tools/immscan.py`: finds functions referenced only by immediates (0 on this disc).
 
 ## 0.1.0 (2026-11-24)
 
