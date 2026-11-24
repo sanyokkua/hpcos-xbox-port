@@ -1,9 +1,10 @@
 # Changelog
 
-## 0.1.0 (unreleased, 2026-11-22)
+## 0.1.0 (2026-11-24)
 
-First playable version: the Xbox USA disc of *Harry Potter and the Chamber of Secrets*, built on the player's Mac. Local only so
-far; not released.
+First release: the Xbox USA disc of *Harry Potter and the Chamber of Secrets*, built on the player's Mac. Played from the
+logos through the Burrow, Knockturn Alley, Diagon Alley and its shops, the Leaky Cauldron and the Whomping Willow to the first
+day at Hogwarts; saving and loading work.
 
 - Base: the engine of the Harry Potter and the Sorcerer's Stone port (sanyokkua/hp1-xbox-port v0.1.0), which is the NFS
   Underground 2 port's engine (xboxrecomp, nfsu2-sw, nfsu2-ios's Apple host and Metal renderer, NFSU2Deadware's Mac patches).
@@ -55,5 +56,7 @@ far; not released.
   ever real code again (`tools/stubcheck.py`). Also from this test's audit: a skipped wild call keeps the stack
   balanced; file handles are held while in use and closed once; reads at an offset are atomic; a timer can no longer
   lose its wake-up; a crate's drops are not removed twice after a level streams (HP-COS's guard).
-- Known limits: only the Burrow, Diagon Alley and Borgin & Burkes have been played; 4:3 only (no widescreen); the PAL disc
-  is not supported.
+- Seventh play test (2026-11-24): 46 minutes from Diagon Alley to Hogwarts with no wild call and no crash. Screenshots of
+  five more places.
+- Known limits: the rest of the school year has not been played on the Mac; 4:3 only (no widescreen); the PAL disc is not
+  supported.

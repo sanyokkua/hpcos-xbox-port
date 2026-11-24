@@ -31,14 +31,13 @@ the installer, and keeps the same style as the other ports in this series ([Sorc
 [NFS Underground 2](https://github.com/sanyokkua/nfsu2-xbox-port), [NFS Underground](https://github.com/sanyokkua/nfsu-xbox-port),
 [NFS Hot Pursuit 2](https://github.com/sanyokkua/nfs-hp2-ps2-port)).
 
-**Status:** version 0.1.0, local only, **not released yet**. It plays from the logos and the intro movie through New Game, loading
-and the opening cutscene at the Burrow into free play there (Harry walks and casts spells, the Flipendo tutorial, Fred, George
-and Ron), at 60 fps at 3x on an M1 Pro. The pause menu and the game's Options work, and there is sound.
+**Status:** version 0.1.0. Played from the logos and the intro movie through New Game, the Burrow, Knockturn Alley and
+Borgin & Burkes, Diagon Alley (Flourish & Blotts, the Leaky Cauldron, the Magical Menagerie), the Whomping Willow and the
+arrival at Hogwarts into the first school day, at 60 fps at 3x on an M1 Pro, with sound. Saving and loading work.
 
 - It is an experiment, worked on when time allows; it is **not actively supported**.
-- **Saving and loading are not confirmed yet.** The game has no save menu: walk up to a SAVE GAME scroll and press A; it
-  saves to the slot picked at New Game, and "Continue" appears on the title once a save exists.
-- Only the Burrow and the start of the next chapter have been played.
+- The rest of the school year has not been played on the Mac yet. If something breaks, the log (Settings > Advanced > Logs)
+  says where; please attach it to an issue.
 - **4:3 only** (no widescreen).
 - Apple Silicon and **macOS 15 or newer** only, and only the **Xbox USA disc** (the PAL edition is not supported).
 
@@ -49,7 +48,7 @@ How it was made, step by step: [docs/PORTING.md](docs/PORTING.md). Changes per v
 You need an **Apple Silicon Mac with macOS 15 or newer** and your own disc image (ISO) of the **USA Xbox release** of
 *Harry Potter and the Chamber of Secrets*. Nothing of the game is included: the installer builds it on your Mac from your disc.
 
-1. Get `Harry-Potter-Chamber-of-Secrets-<version>.dmg` (5.2 MB; build it with `tools/make_dmg.sh`, see below), open it and drag
+1. Download `Harry-Potter-Chamber-of-Secrets-<version>.dmg` from [Releases](https://github.com/sanyokkua/hpcos-xbox-port/releases) (or build it with `tools/make_dmg.sh`, see below), open it and drag
    **Harry Potter Chamber of Secrets Installer** to Applications.
 2. **Open it.** The installer isn't notarized by Apple, so the first time macOS refuses. Close that message (don't move it to the
    Trash), go to **System Settings > Privacy & Security**, scroll to the message about it, click **Open Anyway** and confirm.
@@ -120,8 +119,8 @@ The game's own sliders for music, speech and effects are in its **Options**.
 
 ### Saving and quitting
 
-The game saves the way it always did, at its story points and from its pause menu. **Saving and loading are not tested yet** on
-the Mac, so do not rely on them. To quit, use **Quit Game** in the settings menu (it asks first), **Cmd+Q**, or close the
+The game saves the way it always did: walk up to a **SAVE GAME** scroll and press A. It saves to the slot picked at New Game,
+and **Continue** on the title loads it. To quit, use **Quit Game** in the settings menu (it asks first), **Cmd+Q**, or close the
 window. Progress since your last save in the game is lost, as when an Xbox is switched off.
 
 ### Your files
@@ -146,8 +145,14 @@ To remove the game, delete **Harry Potter Chamber of Secrets** from Applications
 | The main menu | The intro movie |
 | ![Ron and Harry in the flying car](docs/screenshots/burrow-arrival.webp) | ![Free play in the Burrow's garden](docs/screenshots/burrow-garden.webp) |
 | The Burrow cutscene: Ron and Harry in the flying car | Free play at the Burrow |
-| ![The pause menu and the game's Options](docs/screenshots/pause-options.webp) | ![The settings menu, Tweaks page](docs/screenshots/settings-tweaks.webp) |
-| The pause menu and the game's Options | The settings menu: Tweaks |
+| ![Diagon Alley](docs/screenshots/diagon-alley.webp) | ![The Leaky Cauldron](docs/screenshots/leaky-cauldron.webp) |
+| Diagon Alley | The Leaky Cauldron, with Hagrid at the bar |
+| ![Hogwarts at night](docs/screenshots/hogwarts-exterior.webp) | ![The Grand Staircase](docs/screenshots/grand-staircase.webp) |
+| Hogwarts at night, Ron at the door | The Grand Staircase |
+| ![The Gryffindor dormitory](docs/screenshots/gryffindor-dormitory.webp) | ![The pause menu and the game's Options](docs/screenshots/pause-options.webp) |
+| The Gryffindor dormitory | The pause menu and the game's Options |
+| ![The settings menu, Tweaks page](docs/screenshots/settings-tweaks.webp) | |
+| The settings menu: Tweaks | |
 
 Taken on an M1 Pro, in a window; the game's 4:3 picture as Picture: Fit shows it.
 

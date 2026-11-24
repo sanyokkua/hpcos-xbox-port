@@ -183,6 +183,43 @@ coordinate is outside [0,1]. Found with `RECOMP_DRAW_LOG` (now prints `bc`) and 
 painting the border red (the far floor through the arch) and by before/after dumps. Test with the owner's save:
 `build/t/gr1` (POTTER B, Continue → down → A).
 
+## 3g. After the owner's sixth play test (2026-11-24): the freeze after a door
+
+**Symptom.** In the Leaky Cauldron cellar (and once in Knockturn Alley) the game crashed or froze for good right after Harry
+opened a door, a few seconds after he had picked up Bertie Bott's beans or coins. The log showed `[ICALL]` wild calls from the
+entity update and then the NOP trap repeating.
+
+**Reproduction.** `HPCOS_WARP=8` (the Leaky Cauldron) from the owner's save, `HPCOS_PAD_REPLAY=<log>,<t0>,0` with
+`HPCOS_REPLAY_AT_WARP=1` (the owner's own pad input, its clock started when the warped level is in play) and `HPCOS_FF_AUTO=1`
+(every cutscene skipped as it starts, as the owner did): 3 of 3 froze at the door.
+
+**Cause: an empty stub on real code.** `engine/gen/recomp_stubs_unresolved.c` gives every call or jump target the disassembler
+did not see as a function an empty body (`g_esp += 4`). The bean and coin pick-up (`0x721C0`) ends with a tail jump to a shared
+exit at `0x72510` (`pop esi; pop ebp; pop edi; ret`) that no function owned, so it got such a stub. The three pops never ran: the
+entity update (`sub_00042F70`) got its stack back 12 bytes short and its loop registers replaced by pointers, walked off the
+entity list and called through `[garbage+0x74]`. The improved wild-call log (the guest return address, the last 16 indirect
+call targets, the pool slot the target falls in) pointed at the pick-up every time.
+
+**Fix.** `tools/stubcheck.py` classes every stub: an instruction start inside a detected function (`BOUNDARY`) or a stub in
+`.text` outside every function (`code`) is real code; inside an instruction (`mid-insn`) or outside `.text` (`data`) it is a
+misdecode and harmless. 33 of 45 stubs were real code. 31 of them are in HP-COS's function list. Seeding a stub can split a
+function and turn its jumps into new stubs, so it took three rounds: 47 seeds, now 13 stubs and 0 real.
+`tools/relift.sh` runs the check after every lift and fails when one is real code. After the fix: 3 of 3 through the door,
+8 of 8 boots to play, a save written, and the owner played 46 minutes from Diagon Alley to Hogwarts with no wild call.
+
+**The audit that came with it** (the owner asked for every similar pattern to be checked):
+1. A wild call that is skipped keeps the stack balanced: `recomp_icall_skip_esp()` reads the return site, and when it is
+   `add esp, n` (a cdecl call) it pops the return address only.
+2. File handles: a handle count apart from the reference count, `CloseHandle` drops one handle once, a closed object is never
+   found again, `WaitForSingleObject` and `NtReadFile`/`NtWriteFile` hold a reference while they use one. Reads and writes at an
+   offset are `pread`/`pwrite` (atomic).
+3. Timers: firing signals inside the timer lock before the DPC, and `KeSetTimer` resets inside it, so a wake-up is never lost.
+   256 timers, 65,536 handles, a log when either runs out.
+4. Kernel objects: a stale host shadow is dropped when the guest re-initialises the header as another type; Ke*Initialize*
+   writes the header before the shadow.
+5. The heap refuses a size larger than itself (a 64-bit top check).
+6. The crate spawner's clean-up skips entities that are no longer its own (HP-COS's guard, `sub_000FC830`).
+
 ## 4. Port features
 
 - **Settings menu** (the NFS ports' overlay): this game's rows in `engine/src/overlay/`. Pages: Display, Graphics, Audio, Input,
@@ -203,7 +240,7 @@ Here: the target `hpcos_recomp`, the binary `hpcos`, the `HPCOS_` installer vari
 
 ## Tools
 
-Dev scripts: `tools/run_test.sh <name> <secs> <shot times>` (a scripted run with screenshots), `tools/sheet.sh` (a contact sheet
+Dev scripts: `tools/stubcheck.py` (is any empty stub real code; `tools/relift.sh` runs it), `tools/run_test.sh <name> <secs> <shot times>` (a scripted run with screenshots), `tools/sheet.sh` (a contact sheet
 of the shots), `tools/seedcheck.py` (is every seed an instruction start), `tools/addseed.py`, `tools/relift.sh`,
 `tools/play_dev.sh` (play in a window, own HOME).
 
@@ -220,6 +257,11 @@ Debug switches added for this game:
 | `RECOMP_MTL_NODEPTH`, `RECOMP_MTL_NOATEST` | depth and alpha test off, to find what hides a draw |
 | `RECOMP_SPLIT_WHO` | what splits a render pass |
 | `RECOMP_VPOFF_LOG` | viewport offset writes |
+| `HPCOS_WARP=<level>[:start]` | load a level 3 s into play, as the pause menu's debug level selector does (the level numbers are HP-COS's trainer's) |
+| `HPCOS_SAVE_NOW=<secs>` | ask for a save once, as a SAVE GAME scroll does |
+| `HPCOS_PAD_REPLAY=<log>,<t0>,<offset>` | replay the pad reports of a play log (`HPCOS_PAD_LOG=1`) |
+| `HPCOS_REPLAY_AT_WARP=1` | start the replay's clock once the warped level is in play |
+| `HPCOS_FF_AUTO=1` | skip every cutscene as it starts |
 
 ## Verification
 
@@ -228,15 +270,18 @@ Debug switches added for this game:
   Fred, George and Ron), the pause menu and the game's Options, 60 fps at 3x, sound.
 - Boots: 35 of 36 to the intro cutscene with 6 at once before the end-of-file fix, the 36th a stall at boot (see 3b, 6 and 7). Audio: output dumps of the logos, the intro, the title menu and the
   Burrow are continuous, with no clicks or noise bursts beyond the sounds themselves.
+- The owner's play tests: the Burrow, Knockturn Alley and Borgin & Burkes, Diagon Alley (Flourish & Blotts, the Leaky
+  Cauldron, the Magical Menagerie), the Whomping Willow, Hogwarts at night and the first day; saving with a scroll and
+  Continue from the title. The last test: 46 minutes, no wild call, no crash.
+- Screenshots of Diagon Alley, the Leaky Cauldron, Hogwarts, the Grand Staircase and the dormitory: `HPCOS_WARP=<level>[:start]`
+  from a save, `tools/run_test.sh`, 0 wild calls in each.
 - `tools/make_dmg.sh`: DMG 5.2 MB, `tests/dmg_no_game_code.sh` PASS (2,263 disc files, 64 code windows).
 - A clean install from the DMG: **1 min 27 s** on the M1 Pro.
 
 ## Not verified, known limits
 
-- **Saving and loading** are not tested. The game saves at story points; the tests did not reach one.
-- **Anything past the Burrow** is not tested.
+- **The rest of the school year** (after the first day at Hogwarts) has not been played on the Mac.
 - **Widescreen:** 4:3 only. **PAL disc:** not supported.
-- **Saving** is not confirmed yet (3c, item 1).
 - **The file-cache hold** makes the old 1-in-8 load hang rare, but it works around a timing difference between the console and
   this runtime. It is not a proven cure.
 
@@ -250,3 +295,8 @@ Debug switches added for this game:
 - **Sampling a video at 1 fps** hides which part of a scene is slow; use 3 fps around the moment.
 - **zsh** reads `$t:shot` as a variable modifier: write `${t}` in generated scripts.
 - **Frame dumps at 4x are 11-20 MB each:** dump sparsely and delete them.
+- **An empty stub is silent.** The lifter's "not detected" stubs return at once. On a shared exit that another function jumps to,
+  the caller's registers and stack come back wrong and the game breaks much later, somewhere else. Run `tools/stubcheck.py`
+  after every lift, and repeat after seeding (a seed can split a function).
+- **A warp without a start point** (`HPCOS_WARP=30`) can leave Harry outside every room: only objects are drawn. Give one
+  (`HPCOS_WARP=30:0`).
