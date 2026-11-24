@@ -252,6 +252,23 @@ Three fixes hppoa-xbox-port found (its `7b59edc`, `c053b83`, `79c7af5`); none ch
 6. **Learned stick range** (`stick_deadzone.h`): 8 directions each keep the furthest reach seen (at least 0.60, at most 1), radial scaling by it.
    Tests in `engine/xboxrecomp/tests/stick_deadzone` (all pass). The executor's inline fixed-function change is not taken (still being checked in PoA).
 
+### 3h, round 3: the pushbuffer executor (Unreleased)
+
+7. **hppoa's executor fix** (its `006d8a3`, three parts): inline and SET_VERTEX batches in fixed-function mode are transformed
+   (`RECOMP_INLINE_FF=0` = the old rule), `SET_VERTEX_DATA4F(3)` diffuse is used, and 1-vertex point and 2-vertex line batches are kept.
+   Not taken: the round-2 debug aids and the overlay `capture` action.
+   **Safety check** (temporary probes, not committed): routes = logos, intro, title, New Game to the Burrow (HUD, pause), and
+   `HPCOS_WARP` 4, 8, 12, 20 (Borgin & Burkes, Leaky Cauldron, Whomping Willow, ...), with START pulses and FF_AUTO. Result:
+   - **Inline/SET_VERTEX batches in fixed-function mode: 0 draws** in every route, and **SET_VERTEX_DATA4F(3) diffuse: 0**. For these
+     two parts the new and the `RECOMP_INLINE_FF=0` binaries run the same code on this game's routes. Screenshot pairs of the
+     two runs (logos, title identical to the pixel; Burrow, HUD, pause differ only where the game state differs: runs are not
+     frame-locked, pause/scene timing and lighting flicker move) are therefore no evidence either way beyond that.
+   - **Short batches: only in the Whomping Willow level (12)**, ~280 per frame, all 2-vertex `LINES` through a vertex program.
+     Controlled A/B in one process (lines dropped on alternate frames, `RECOMP_GL_DUMP_AT` 16 consecutive frames): same-parity
+     frames differ by 8 px, alternating ones by ~2,370 px, and the difference is exactly thin slanted streaks over the whole
+     screen: the rain. A fix (the rain was missing), nothing else changes.
+8. Smoke (`tools/smoke.sh 60`): OK.
+
 ## 4. Port features
 
 - **Settings menu** (the NFS ports' overlay): this game's rows in `engine/src/overlay/`. Pages: Display, Graphics, Audio, Input,

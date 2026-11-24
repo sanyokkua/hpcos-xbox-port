@@ -11,6 +11,7 @@ Engine and tool fixes backported from the Prisoner of Azkaban port (no change to
 - Metal shaders compile as MSL 3.0 (`RECOMP_MTL_LANG` overrides); the hitch log counts pipelines.
 - Stick range compensation learned per direction instead of a fixed 0.65 (a 65 % push no longer reads as full; `RECOMP_STICK_RANGE=0.65` restores it).
 - `tools/immscan.py`: finds functions referenced only by immediates (0 on this disc).
+- Pushbuffer executor, from the Prisoner of Azkaban port: 1-vertex point and 2-vertex line batches are no longer dropped (the Whomping Willow's rain is drawn now); inline/SET_VERTEX batches in fixed-function mode are transformed and `SET_VERTEX_DATA4F` diffuse is used (neither occurs in this game's routes; `RECOMP_INLINE_FF=0` restores the old rule).
 
 ## 0.1.0 (2026-11-24)
 
