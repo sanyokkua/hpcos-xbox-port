@@ -48,5 +48,12 @@ far; not released.
   game draws each frame around Harry, with a grey border colour (its "no shadow" value). Metal samplers only have black
   or white borders, so the port used white: everything outside the map was lit twice as bright, and the map's edges
   showed as dark bands moving with the camera. The pixel shader now returns each stage's own border colour.
+- Sixth play test (2026-11-24): the crash or freeze after opening a door (Leaky Cauldron cellar, Knockturn Alley) is
+  fixed. Picking up a Bertie Bott's bean or a coin ran code whose shared exit the lifter had missed and replaced with an
+  empty stub: the game's entity update came back with its stack and loop registers wrong, then called through garbage
+  and crashed or hung at the next door. All 47 such missed functions are lifted now, and the build stops if a stub is
+  ever real code again (`tools/stubcheck.py`). Also from this test's audit: a skipped wild call keeps the stack
+  balanced; file handles are held while in use and closed once; reads at an offset are atomic; a timer can no longer
+  lose its wake-up; a crate's drops are not removed twice after a level streams (HP-COS's guard).
 - Known limits: only the Burrow, Diagon Alley and Borgin & Burkes have been played; 4:3 only (no widescreen); the PAL disc
   is not supported.
