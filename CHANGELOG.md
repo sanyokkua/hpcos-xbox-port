@@ -60,5 +60,6 @@ day at Hogwarts; saving and loading work.
   five more places. A clean install from the DMG found one more crash: when a controller disconnected (a pad going to
   sleep), the game's thread looked for pads again while the main thread did the same, and the app aborted (sdl2-compat keeps
   its pad list without a lock). Pads are now opened and closed on the main thread only; the game's thread just reads them.
+  The keyboard's Q / E are White / Black again (they had stayed on the old, swapped bumpers).
 - Known limits: the rest of the school year has not been played on the Mac; 4:3 only (no widescreen); the PAL disc is not
   supported.
