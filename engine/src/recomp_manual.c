@@ -436,7 +436,8 @@ static void xi_update_ports(void)
     pthread_mutex_lock(&s_xi_lock);
     old = MEM32(XPP_GAMEPAD_TYPE);
     if (cur != old) {
-        /* one atomic OR: XAPI clears these bits from the game's threads */
+        /* one atomic OR: narrows, does not close, the race with XAPI's own
+         * (non-atomic) clear of these bits on the game's threads */
         __atomic_fetch_or((uint32_t *)XBOX_PTR(XPP_GAMEPAD_TYPE + 4), cur ^ old, __ATOMIC_SEQ_CST);
         MEM32(XPP_GAMEPAD_TYPE) = cur;
         fprintf(stderr, "[input] controller ports now %X (was %X)\n", cur, old);
@@ -559,9 +560,10 @@ void sub_0017725D(void)
 extern void sub_000FC830_gen(void);
 void sub_000FC830(void)
 {
-    uint32_t list = MEM32(esp + 4), count = MEM32(list + 0x14), entries = MEM32(list + 0x18);
-    for (uint32_t k = 0; k < count; k++) {
-        uint32_t entry = entries + k * 16, ent = MEM32(entry);
+    uint32_t list = MEM32(esp + 4), entries = MEM32(list + 0x18);
+    int32_t count = (int32_t)MEM32(list + 0x14);    /* signed, as the original's jle */
+    for (int32_t k = 0; k < count; k++) {
+        uint32_t entry = entries + (uint32_t)k * 16u, ent = MEM32(entry);
         if (ent && MEM32(ent + 0xA8) != MEM32(entry + 0xC)) {
             fprintf(stderr, "[spawn] clean-up skips entity %08X (entry %08X: not its record)\n", ent, entry);
             MEM32(entry) = 0;

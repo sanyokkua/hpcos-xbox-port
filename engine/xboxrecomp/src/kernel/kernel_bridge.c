@@ -7939,8 +7939,6 @@ static void bridge_KeInitializeEvent(void)
         return;
     }
 
-    ke_shadow_insert(guest_va, h);
-
     /* Also zero the guest KEVENT struct (16 bytes) and set SignalState.
      * KEVENT layout: +0x00 Type(UCHAR), +0x01 Absolute(UCHAR),
      *                +0x02 Size(UCHAR), +0x03 Inserted(UCHAR)
@@ -7953,6 +7951,10 @@ static void bridge_KeInitializeEvent(void)
     BRIDGE_MEM32(guest_va + 4) = initial_state ? 1 : 0; /* SignalState */
     BRIDGE_MEM32(guest_va + 8) = 0;  /* WaitListHead.Flink (self/empty) */
     BRIDGE_MEM32(guest_va + 12) = 0; /* WaitListHead.Blink (self/empty) */
+
+    /* The header first, then the shadow: a header still reading as a guest
+     * object (Size 4) beside a shadow is taken as a stale shadow and dropped. */
+    ke_shadow_insert(guest_va, h);
 
     g_eax = 0;
 }
@@ -7971,8 +7973,6 @@ static void bridge_KeInitializeMutant(void)
         return;
     }
 
-    ke_shadow_insert(guest_va, h);
-
     /* Mutant dispatcher header. SignalState semantics differ from events:
      * a mutant is SIGNALLED (owned count 0) when its SignalState is 0.
      * Win32 CreateMutex(initialOwner=TRUE) is owned, so SignalState=1. */
@@ -7983,6 +7983,10 @@ static void bridge_KeInitializeMutant(void)
     BRIDGE_MEM32(guest_va + 4) = initial_owner ? 1 : 0; /* SignalState */
     BRIDGE_MEM32(guest_va + 8) = 0;   /* WaitListHead */
     BRIDGE_MEM32(guest_va + 12) = 0;
+
+    /* The header first, then the shadow: a header still reading as a guest
+     * object (Size 4) beside a shadow is taken as a stale shadow and dropped. */
+    ke_shadow_insert(guest_va, h);
 
     g_eax = 0;
 }
@@ -8002,8 +8006,6 @@ static void bridge_KeInitializeSemaphore(void)
         return;
     }
 
-    ke_shadow_insert(guest_va, h);
-
     BRIDGE_MEM8(guest_va + 0)  = 18;   /* DispatcherObjectType */
     BRIDGE_MEM8(guest_va + 1)  = 0;
     BRIDGE_MEM8(guest_va + 2)  = 16;
@@ -8011,6 +8013,10 @@ static void bridge_KeInitializeSemaphore(void)
     BRIDGE_MEM32(guest_va + 4) = (LONG)count; /* SignalState = count */
     BRIDGE_MEM32(guest_va + 8) = 0;   /* WaitListHead */
     BRIDGE_MEM32(guest_va + 12) = 0;
+
+    /* The header first, then the shadow: a header still reading as a guest
+     * object (Size 4) beside a shadow is taken as a stale shadow and dropped. */
+    ke_shadow_insert(guest_va, h);
 
     g_eax = 0;
 }
