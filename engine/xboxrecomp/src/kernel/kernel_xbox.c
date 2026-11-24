@@ -196,6 +196,20 @@ NTSTATUS __stdcall xbox_ExQueryNonVolatileSetting(
         }
         break;
 
+    case 0x103:
+        /* XC_FACTORY_AV_REGION: NTSC-M (0x00400100). XGetVideoStandard
+         * returns its second byte (1 = NTSC-M). Unanswered it was 0, and PoA
+         * (renderer init, 0x000349E5) then kept its PAL frame floor: a 40 ms
+         * minimum game step instead of 33 ms. HP3-Recompiled made the same fix.
+         * Matches the fixed North America game region below (this port serves
+         * the USA disc only). */
+        if (ValueLength >= sizeof(ULONG)) {
+            *(PULONG)Value = 0x00400100;
+            if (Type) *Type = 4;
+            if (ResultLength) *ResultLength = sizeof(ULONG);
+        }
+        break;
+
     case 0x104:
         /* XC_FACTORY_GAME_REGION: 1 North America, as the NTSC disc expects.
          * 0 (the default below) made CoS pick UK English (HP-COS-Xbox-Recomp). */
