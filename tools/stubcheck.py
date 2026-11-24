@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.join(R, "tools"))
 from sigmatch import load, read
 from capstone import Cs, CS_ARCH_X86, CS_MODE_32
 
-TEXT = (0x11000, 0x130620)
+TEXT = (0x11000, 0x17DA80)  # .text plus the XDK code sections (D3D, D3DX, XGRPH, DSOUND, XMV, XPP), up to .rdata
 secs = load(os.path.join(R, "game/extracted/default.xbe"))
 fs = json.load(open(os.path.join(R, "engine/xboxrecomp/tools/disasm/output/functions.json")))
 rng = sorted((int(f["start"], 16), int(f["end"], 16)) for f in fs)
@@ -43,7 +43,8 @@ for a in (int(x, 16) for x in stubs):
         s = rng[i][0]
         kind = "BOUNDARY" if a in {x.address for x in md.disasm(read(secs, s, a - s + 16) or b"", s)} else "mid-insn"
     else:
-        kind = "code" if TEXT[0] <= a < TEXT[1] else "data"
+        # bytes past a section's raw data (zero fill, nothing in the file) are not code
+        kind = "code" if TEXT[0] <= a < TEXT[1] and read(secs, a, 1) else "data"
     real += kind in ("BOUNDARY", "code")
     ins = [f"{x.mnemonic} {x.op_str}" for x, _ in zip(md.disasm(read(secs, a, 16) or b"", a), range(2))]
     print(f"{a:#010x} {kind:8} from {','.join(sorted(refs.get('sub_%08X' % a, [])))} | {' ; '.join(ins)}")
