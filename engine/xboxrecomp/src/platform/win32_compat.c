@@ -445,6 +445,37 @@ static w32_object *obj_from(HANDLE h)
     return hit;
 }
 
+/* obj_from with a reference held: the object outlives a CloseHandle made by
+ * another thread while the caller still uses it (a wait parked on its condition
+ * variable, a read on its fd). Taken under the registry lock, and only while the
+ * count is above zero: obj_release drops the last reference before it removes the
+ * object from the registry. Pair with obj_release. */
+static w32_object *obj_get(HANDLE h)
+{
+    w32_object *o = (w32_object *)h, *hit = NULL;
+    uint32_t i, n;
+
+    if (!o || o == W32_REG_TOMB || h == INVALID_HANDLE_VALUE)
+        return NULL;
+    i = reg_hash(o);
+    pthread_mutex_lock(&s_reg_lock);
+    for (n = 0; n < W32_REG_SIZE && s_reg[i];
+         n++, i = (i + 1) & (W32_REG_SIZE - 1)) {
+        if (s_reg[i] == o) {
+            LONG r = __atomic_load_n(&o->refcount, __ATOMIC_ACQUIRE);
+            while (r > 0 && !__atomic_compare_exchange_n(&o->refcount, &r, r + 1, 0,
+                                                         __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE))
+                ;
+            if (r > 0) hit = o;
+            break;
+        }
+    }
+    pthread_mutex_unlock(&s_reg_lock);
+    if (!hit)
+        SetLastError(ERROR_INVALID_HANDLE);
+    return hit;
+}
+
 static w32_object *obj_alloc(w32_kind kind)
 {
     w32_object *o = (w32_object *)calloc(1, sizeof(w32_object));
@@ -487,6 +518,24 @@ HANDLE w32_open_handle(int fd, const char *host_path)
     o->fd        = fd;
     o->file_path = host_path ? strdup(host_path) : NULL;
     return (HANDLE)o;
+}
+
+/* The fd of a file handle, with the handle held until w32_handle_put(ref):
+ * a close by another thread then cannot close the fd, and its number cannot go
+ * to the next open, while a read or write is using it. */
+int w32_handle_get_fd(HANDLE h, void **ref)
+{
+    w32_object *o = obj_get(h);
+    *ref = NULL;
+    if (!o) return -1;
+    if (o->kind != K_FILE) { obj_release(o); return -1; }
+    *ref = o;
+    return o->fd;
+}
+
+void w32_handle_put(void *ref)
+{
+    if (ref) obj_release((w32_object *)ref);
 }
 
 int w32_handle_fd(HANDLE h)
@@ -661,10 +710,13 @@ DWORD WaitForSingleObject(HANDLE h, DWORD ms)
     if (!h || h == PSEUDO_CURRENT_THREAD || h == PSEUDO_CURRENT_PROCESS)
         return WAIT_OBJECT_0;
     {
-        w32_object *o = obj_from(h);
+        w32_object *o = obj_get(h);   /* held: a close while parked must not free it */
+        DWORD r;
         if (!o)
             return WAIT_FAILED;
-        return wait_single(o, ms);
+        r = wait_single(o, ms);
+        obj_release(o);
+        return r;
     }
 }
 

@@ -196,6 +196,16 @@ NTSTATUS __stdcall xbox_ExQueryNonVolatileSetting(
         }
         break;
 
+    case 0x104:
+        /* XC_FACTORY_GAME_REGION: 1 North America, as the NTSC disc expects.
+         * 0 (the default below) made CoS pick UK English (HP-COS-Xbox-Recomp). */
+        if (ValueLength >= sizeof(ULONG)) {
+            *(PULONG)Value = 1;
+            if (Type) *Type = 4;
+            if (ResultLength) *ResultLength = sizeof(ULONG);
+        }
+        break;
+
     case XC_MISC:
         /* Misc flags: 0 = no special flags */
         if (ValueLength >= sizeof(ULONG)) {
