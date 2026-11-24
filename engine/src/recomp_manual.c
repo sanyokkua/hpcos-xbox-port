@@ -436,7 +436,8 @@ static void xi_update_ports(void)
     pthread_mutex_lock(&s_xi_lock);
     old = MEM32(XPP_GAMEPAD_TYPE);
     if (cur != old) {
-        MEM32(XPP_GAMEPAD_TYPE + 4) |= cur ^ old;
+        /* one atomic OR: XAPI clears these bits from the game's threads */
+        __atomic_fetch_or((uint32_t *)XBOX_PTR(XPP_GAMEPAD_TYPE + 4), cur ^ old, __ATOMIC_SEQ_CST);
         MEM32(XPP_GAMEPAD_TYPE) = cur;
         fprintf(stderr, "[input] controller ports now %X (was %X)\n", cur, old);
     }
@@ -567,6 +568,67 @@ void sub_000FC830(void)
         }
     }
     sub_000FC830_gen();
+}
+
+/* ── Entity list check (diagnostics) ────────────────────────────────────────
+ * Entities live in a pool ([0x524304], 0xDC bytes each, [0x52455E] of them); the
+ * live ones are chained from [0x5242FC] through +0x10, each with its objects chained
+ * from +0xAC through +0x10. sub_00042D60(ent, flag) removes one (a no-op when its
+ * alive bit, +0 bit 0, is clear). Before the world's per-frame walk (sub_00042FF0)
+ * the chains are checked; the first break is logged with the last removals and
+ * their callers, so a corruption shows where it began instead of as a crash frames
+ * later. Costs a walk of the live entities a frame. */
+static int guest_ptr_ok(uint32_t p)
+{
+    return (p >= 0x10000u && p < 0x04000000u) || (p >= 0x80000000u && p < 0x84000000u);
+}
+static struct { uint32_t ent, caller, alive; } s_removed[16];
+static unsigned s_removed_n;
+extern void sub_00042D60_gen(void);
+void sub_00042D60(void)
+{
+    uint32_t ent = MEM32(esp + 4);
+    unsigned i = s_removed_n++ % 16u;
+    s_removed[i].ent = ent;
+    s_removed[i].caller = MEM32(esp);
+    s_removed[i].alive = guest_ptr_ok(ent) ? MEM32(ent) & 1u : 0xEEu;
+    sub_00042D60_gen();
+}
+static void entity_list_check(void)
+{
+    static int reported;
+    uint32_t pool = MEM32(0x00524304u), n = (uint32_t)(int32_t)(int16_t)MEM16(0x0052455Eu);
+    uint32_t end = pool + n * 0xDCu, ent = MEM32(0x005242FCu), steps = 0;
+    const char *why = NULL;
+    uint32_t bad = 0, where = 0;
+    if (reported >= 3 || !ent || !guest_ptr_ok(pool)) return;
+    for (; ent && steps < 4096u; ent = MEM32(ent + 0x10), steps++) {
+        if (ent < pool || ent >= end || (ent - pool) % 0xDCu) { why = "entity outside the pool"; bad = ent; break; }
+        if (!(MEM32(ent) & 1u)) { why = "dead entity still chained"; bad = ent; break; }
+        {
+            uint32_t obj = MEM32(ent + 0xAC), k = 0;
+            for (; obj && k < 4096u; obj = MEM32(obj + 0x10), k++)
+                if (!guest_ptr_ok(obj)) { why = "object pointer out of memory"; bad = obj; where = ent; break; }
+            if (!why && k >= 4096u) { why = "object chain loops"; bad = MEM32(ent + 0xAC); where = ent; }
+        }
+        if (why) break;
+        where = ent;
+    }
+    if (!why && steps >= 4096u) why = "entity chain loops";
+    if (!why) return;
+    reported++;
+    fprintf(stderr, "[entity] list broken: %s: %08X (after/in entity %08X), pool %08X x%u\n",
+            why, bad, where, pool, n);
+    for (unsigned j = 0; j < 16u && j < s_removed_n; j++) {
+        unsigned i = (s_removed_n - 1u - j) % 16u;
+        fprintf(stderr, "  removed %08X (alive %X) from %08X\n", s_removed[i].ent, s_removed[i].alive, s_removed[i].caller);
+    }
+}
+extern void sub_00042FF0_gen(void);
+void sub_00042FF0(void)
+{
+    entity_list_check();
+    sub_00042FF0_gen();
 }
 
 /* ── Cutscene skip (overlay: Tweaks, HPCOS_SKIP_CUTSCENES=1) ────────────────
