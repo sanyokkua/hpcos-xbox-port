@@ -57,6 +57,8 @@ day at Hogwarts; saving and loading work.
   balanced; file handles are held while in use and closed once; reads at an offset are atomic; a timer can no longer
   lose its wake-up; a crate's drops are not removed twice after a level streams (HP-COS's guard).
 - Seventh play test (2026-11-24): 46 minutes from Diagon Alley to Hogwarts with no wild call and no crash. Screenshots of
-  five more places.
+  five more places. A clean install from the DMG found one more crash: when a controller disconnected (a pad going to
+  sleep), the game's thread looked for pads again while the main thread did the same, and the app aborted (sdl2-compat keeps
+  its pad list without a lock). Pads are now opened and closed on the main thread only; the game's thread just reads them.
 - Known limits: the rest of the school year has not been played on the Mac; 4:3 only (no widescreen); the PAL disc is not
   supported.

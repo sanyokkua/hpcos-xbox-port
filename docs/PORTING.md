@@ -220,6 +220,13 @@ function and turn its jumps into new stubs, so it took three rounds: 47 seeds, n
 5. The heap refuses a size larger than itself (a 64-bit top check).
 6. The crate spawner's clean-up skips entities that are no longer its own (HP-COS's guard, `sub_000FC830`).
 
+**The release check found one more** (a clean install, 2026-11-24): the installed app aborted in `SDL_NumJoysticks`
+(`pointer being freed was not allocated`), called from `xbox_InputGetState` -> `xbox_InputInit` on the game's thread, right as
+the controller disconnected. sdl2-compat refreshes one global pad list, without a lock, both there and while it turns an add
+or remove into an event on the main thread. Now `xbox_input_rescan()` opens and closes the pads on the host's main thread (at
+start and on every add or remove); the game's thread only reads them, under a lock, and no longer pumps SDL. Stress test:
+`NFSU2_PAD_HOTPLUG_TEST=<ms>` attaches and detaches a virtual pad that often (37 ms: 1,600 cycles in 2 minutes, no crash).
+
 ## 4. Port features
 
 - **Settings menu** (the NFS ports' overlay): this game's rows in `engine/src/overlay/`. Pages: Display, Graphics, Audio, Input,
@@ -300,3 +307,5 @@ Debug switches added for this game:
   after every lift, and repeat after seeding (a seed can split a function).
 - **A warp without a start point** (`HPCOS_WARP=30`) can leave Harry outside every room: only objects are drawn. Give one
   (`HPCOS_WARP=30:0`).
+- **SDL from two threads.** sdl2-compat's pad list (`SDL_NumJoysticks`) has no lock. Only the thread that pumps SDL's events
+  may open, close or enumerate pads; other threads read open ones.
