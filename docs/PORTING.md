@@ -227,6 +227,19 @@ or remove into an event on the main thread. Now `xbox_input_rescan()` opens and 
 start and on every add or remove); the game's thread only reads them, under a lock, and no longer pumps SDL. Stress test:
 `NFSU2_PAD_HOTPLUG_TEST=<ms>` attaches and detaches a virtual pad that often (37 ms: 1,600 cycles in 2 minutes, no crash).
 
+## 3h. Backports from the Prisoner of Azkaban port (2026-11-24, Unreleased)
+
+Three fixes hppoa-xbox-port found (its `7b59edc`, `c053b83`, `79c7af5`); none changes this game's lift or smoke result.
+
+1. **Disassembler** `_prune_data_call_targets`: calls made by functions that are themselves call targets called only from data no longer
+   count as a real caller, so they cannot keep a start that splits an instruction. Two tests; the 62 disasm tests pass. Relift: `functions.json`
+   before and after identical (6,131 starts, no start dropped or added, no end moved), so nothing to explain here.
+2. **Kernel** `XC_FACTORY_AV_REGION` (0x103) = 0x00400100 (NTSC-M). This port does not pick a region: it fixes `XC_DVD_REGION` 1 and
+   `XC_FACTORY_GAME_REGION` 1 (USA disc only), so the fixed NTSC-M value is consistent. Only matters if the game calls `XGetVideoStandard`.
+3. **`tools/stubcheck.py`**: range `0x11000..0x17DA80` (`.text` plus D3D, D3DX, XGRPH, DSOUND, XMV, XPP), bytes past a section's raw data
+   are data. Before, the stubs in the XDK sections were classed "data" without a look. Result: 13 stubs, 0 real code, nothing seeded.
+   Smoke (`tools/smoke.sh 60`): OK before (4 frames, mean 77) and after (4 frames, mean 68).
+
 ## 4. Port features
 
 - **Settings menu** (the NFS ports' overlay): this game's rows in `engine/src/overlay/`. Pages: Display, Graphics, Audio, Input,

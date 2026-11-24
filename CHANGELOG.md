@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+Engine and tool fixes backported from the Prisoner of Azkaban port (no change to the lift of this disc, no visible change):
+
+- Disassembler: a call target that splits an instruction is also dropped when its only callers are bodies decoded out of data.
+  Relift of this disc: `functions.json` identical (6,131 starts).
+- Kernel: `ExQueryNonVolatileSetting` answers `XC_FACTORY_AV_REGION` (0x103) as NTSC-M (0x00400100), matching the fixed North America game region.
+- `tools/stubcheck.py` also covers the XDK code sections; bytes past a section's raw size count as data. This disc: 13 stubs, 0 real code.
+
 ## 0.1.0 (2026-11-24)
 
 First release: the Xbox USA disc of *Harry Potter and the Chamber of Secrets*, built on the player's Mac. Played from the
