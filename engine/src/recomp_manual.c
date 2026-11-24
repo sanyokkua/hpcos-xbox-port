@@ -544,6 +544,31 @@ void sub_0017725D(void)
     esp += 4 + 8;
 }
 
+/* ── Spawner clean-up guard (after HP-COS-Xbox-Recomp, MIT: port/src/hle_debug.c) ──
+ * sub_000FC830(list) removes the entity of every entry of a spawner's list (count at
+ * list+0x14, 16-byte entries at list+0x18: entity, kind, id, level record): the
+ * crates', barrels' and urns' drops. The level's streaming (sub_00046700, a door to
+ * the next area) also removes those entities and clears their level record, but
+ * not this entry; the freed slot then goes to another entity, which this clean-up
+ * removed in its place (the original does it too). Removing a live entity twice
+ * corrupted the entity list ([0x5242FC]): the crash in sub_00042FF0 after breaking
+ * things and opening a door (Leaky Cauldron cellar, Knockturn Alley). An entity whose
+ * level record (+0xA8, given by sub_00043430) is not the one the entry spawned
+ * (entry+0xC) is not this entry's: the entry is cleared and the entity left alone. */
+extern void sub_000FC830_gen(void);
+void sub_000FC830(void)
+{
+    uint32_t list = MEM32(esp + 4), count = MEM32(list + 0x14), entries = MEM32(list + 0x18);
+    for (uint32_t k = 0; k < count; k++) {
+        uint32_t entry = entries + k * 16, ent = MEM32(entry);
+        if (ent && MEM32(ent + 0xA8) != MEM32(entry + 0xC)) {
+            fprintf(stderr, "[spawn] clean-up skips entity %08X (entry %08X: not its record)\n", ent, entry);
+            MEM32(entry) = 0;
+        }
+    }
+    sub_000FC830_gen();
+}
+
 /* ── Cutscene skip (overlay: Tweaks, HPCOS_SKIP_CUTSCENES=1) ────────────────
  * After MiddleDucky's HP2-Recompiled (MIT, port/src/hle_skip.c): pressing Start
  * or Back while a cutscene plays (the camera / control mode [0x50C2E4] is 7,
