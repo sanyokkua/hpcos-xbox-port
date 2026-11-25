@@ -269,6 +269,20 @@ Three fixes hppoa-xbox-port found (its `7b59edc`, `c053b83`, `79c7af5`); none ch
      screen: the rain. A fix (the rain was missing), nothing else changes.
 8. Smoke (`tools/smoke.sh 60`): OK.
 
+### 3h, round 4: shared Metal renderer fixes from hppoa (Unreleased)
+
+9. **P8 textures hashed in full** (`bytes_hash_all`, hppoa `b010ad5`), **polygon offset slope x render-target px / game px**
+   (`RECOMP_MTL_ZSLOPE=0` off) and **reflection / normal / sphere map texgen** (0x8512, 0x8511, 0x2402; `RECOMP_MTL_TEXGEN_MAPS=0` off)
+   (hppoa `918dac2`). Not taken: its skin second-layer matcher (`RECOMP_SKIN_LAYER`, PoA only).
+   **Check** (Burrow route and `HPCOS_WARP` 4, 8, 12, 20, scale 300, 80 s each; baseline, all fixes on, `RECOMP_MTL_TEXGEN_MAPS=0`,
+   `RECOMP_MTL_ZSLOPE=0`): none of the three code paths is reached on these routes, so nothing visible changes:
+   - P8: `RECOMP_TEX_CHANGES=1` lists only format 06 changes (9,696 lines over the runs), no format 0B, before or after.
+   - Texgen: no `texgen ... not generated` line at baseline (that line is what any of the three modes printed), none after; the new code
+     only acts on those modes.
+   - Polygon offset: no `polygon offset in use` line before or after (the title never enables it on these routes).
+   Screenshots of on/off runs differ by as much as any two runs (they are not frame-locked); static scenes (w8, 2-9 k px) match.
+   No crash, `tools/smoke.sh 60` OK. A scene that uses these (a reflective or env-mapped surface, a polygon-offset decal) is untested.
+
 ## 4. Port features
 
 - **Settings menu** (the NFS ports' overlay): this game's rows in `engine/src/overlay/`. Pages: Display, Graphics, Audio, Input,
