@@ -1,19 +1,14 @@
 # Changelog
 
-## Unreleased
+## 0.1.1 (2026-11-25)
 
-Engine and tool fixes backported from the Prisoner of Azkaban port (no change to the lift of this disc, no visible change):
+Fixes and speed-ups carried over from the Prisoner of Azkaban port. On the routes tested for this game nothing looks different; the changes make the installer faster and the game more robust.
 
-- Disassembler: a call target that splits an instruction is also dropped when its only callers are bodies decoded out of data.
-  Relift of this disc: `functions.json` identical (6,131 starts).
-- Kernel: `ExQueryNonVolatileSetting` answers `XC_FACTORY_AV_REGION` (0x103) as NTSC-M (0x00400100), matching the fixed North America game region.
-- `tools/stubcheck.py` also covers the XDK code sections; bytes past a section's raw size count as data. This disc: 13 stubs, 0 real code.
-- Metal shaders compile as MSL 3.0 (`RECOMP_MTL_LANG` overrides); the hitch log counts pipelines.
-- Stick range compensation learned per direction instead of a fixed 0.65 (a 65 % push no longer reads as full; `RECOMP_STICK_RANGE=0.65` restores it).
-- `tools/immscan.py`: finds functions referenced only by immediates (0 on this disc).
-- Pushbuffer executor, from the Prisoner of Azkaban port: 1-vertex point and 2-vertex line batches are no longer dropped (the Whomping Willow's rain is drawn now); inline/SET_VERTEX batches in fixed-function mode are transformed and `SET_VERTEX_DATA4F` diffuse is used (neither occurs in this game's routes; `RECOMP_INLINE_FF=0` restores the old rule).
-- Metal renderer, from the Prisoner of Azkaban port: P8 textures hashed in full (changes were missed), polygon offset slope scaled with the render scale (`RECOMP_MTL_ZSLOPE=0` off), reflection/normal/sphere map texgen (`RECOMP_MTL_TEXGEN_MAPS=0` off). None is reached on the routes tested.
-- Metal renderer, from the Prisoner of Azkaban port (xemu audit): depth clamped per pixel, not per vertex (`RECOMP_MTL_ZCLAMP_PIXEL=0` off); clip-range pixel cull in CULL mode, skipped for W-buffer draws (`RECOMP_MTL_ZCULL=0` off); stencil op 0 is ZERO (`RECOMP_MTL_STENCIL_ZERO=0` off); alpha test compares rounded 8-bit alpha (`RECOMP_ATEST_ROUND=0` off); fixed-function lighting no longer flips normals toward the eye (`RECOMP_FF_FLIP_NORMALS=1` restores it). No visible change on the tested routes.
+- Faster install: the game's shaders compile as Metal Shading Language 3.0, which compiles quicker.
+- Rain: the Whomping Willow's rain and other single-point and line effects are drawn now.
+- Controller sticks: the range of each stick is learned per direction, so a gentle push no longer reads as a full one (`RECOMP_STICK_RANGE=0.65` restores the old fixed value).
+- Graphics accuracy: textures that change in place are noticed (full hash of paletted textures), depth is clamped per pixel, pixels outside the clip range are culled, the stencil "zero" operation works, the alpha test uses 8-bit alpha, lighting no longer flips normals toward the viewer, polygon offset scales with the resolution, and reflection and sphere-map texture effects are supported. Each has a switch to restore the old behaviour; none is reached on the routes tested.
+- Under the hood: a more careful disassembler step (the lift of this disc is unchanged, 6,131 functions), the console region answered as North America, a wider stub check (13 stubs, no real code) and a tool that finds functions only reached by immediates (none on this disc). No change to the engine's design.
 
 ## 0.1.0 (2026-11-24)
 

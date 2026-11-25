@@ -227,7 +227,7 @@ or remove into an event on the main thread. Now `xbox_input_rescan()` opens and 
 start and on every add or remove); the game's thread only reads them, under a lock, and no longer pumps SDL. Stress test:
 `NFSU2_PAD_HOTPLUG_TEST=<ms>` attaches and detaches a virtual pad that often (37 ms: 1,600 cycles in 2 minutes, no crash).
 
-## 3h. Backports from the Prisoner of Azkaban port (2026-11-24, Unreleased)
+## 3h. Backports from the Prisoner of Azkaban port (2026-11-24, released in 0.1.1)
 
 Three fixes hppoa-xbox-port found (its `7b59edc`, `c053b83`, `79c7af5`); none changes this game's lift or smoke result.
 
@@ -240,7 +240,7 @@ Three fixes hppoa-xbox-port found (its `7b59edc`, `c053b83`, `79c7af5`); none ch
    are data. Before, the stubs in the XDK sections were classed "data" without a look. Result: 13 stubs, 0 real code, nothing seeded.
    Smoke (`tools/smoke.sh 60`): OK before (4 frames, mean 77) and after (4 frames, mean 68).
 
-### 3h, round 2 (Unreleased)
+### 3h, round 2 (released in 0.1.1)
 
 4. **Metal shaders as MSL 3.0** (`nv2a_metal.m`; `RECOMP_MTL_LANG=<maj>.<min>`, 0 = Metal's default). Log: `[MTL] shader language 3.0`, no
    `shader failed` or `pipeline creation failed` line. hppoa measured a combiner shader at 540 ms (default) vs 43 ms (3.0). Not reproduced
@@ -252,7 +252,7 @@ Three fixes hppoa-xbox-port found (its `7b59edc`, `c053b83`, `79c7af5`); none ch
 6. **Learned stick range** (`stick_deadzone.h`): 8 directions each keep the furthest reach seen (at least 0.60, at most 1), radial scaling by it.
    Tests in `engine/xboxrecomp/tests/stick_deadzone` (all pass). The executor's inline fixed-function change is not taken (still being checked in PoA).
 
-### 3h, round 3: the pushbuffer executor (Unreleased)
+### 3h, round 3: the pushbuffer executor (released in 0.1.1)
 
 7. **hppoa's executor fix** (its `006d8a3`, three parts): inline and SET_VERTEX batches in fixed-function mode are transformed
    (`RECOMP_INLINE_FF=0` = the old rule), `SET_VERTEX_DATA4F(3)` diffuse is used, and 1-vertex point and 2-vertex line batches are kept.
@@ -269,7 +269,7 @@ Three fixes hppoa-xbox-port found (its `7b59edc`, `c053b83`, `79c7af5`); none ch
      screen: the rain. A fix (the rain was missing), nothing else changes.
 8. Smoke (`tools/smoke.sh 60`): OK.
 
-### 3h, round 4: shared Metal renderer fixes from hppoa (Unreleased)
+### 3h, round 4: shared Metal renderer fixes from hppoa (released in 0.1.1)
 
 9. **P8 textures hashed in full** (`bytes_hash_all`, hppoa `b010ad5`), **polygon offset slope x render-target px / game px**
    (`RECOMP_MTL_ZSLOPE=0` off) and **reflection / normal / sphere map texgen** (0x8512, 0x8511, 0x2402; `RECOMP_MTL_TEXGEN_MAPS=0` off)
@@ -283,7 +283,7 @@ Three fixes hppoa-xbox-port found (its `7b59edc`, `c053b83`, `79c7af5`); none ch
    Screenshots of on/off runs differ by as much as any two runs (they are not frame-locked); static scenes (w8, 2-9 k px) match.
    No crash, `tools/smoke.sh 60` OK. A scene that uses these (a reflective or env-mapped surface, a polygon-offset decal) is untested.
 
-### 3h, round 5: NV2A renderer fixes from hppoa's xemu audit (Unreleased)
+### 3h, round 5: NV2A renderer fixes from hppoa's xemu audit (released in 0.1.1)
 
 10. **Five fixes** (hppoa `0961689`, patch hand-merged; each has a switch): depth clamped per pixel (`nv2a_clip`;
     `RECOMP_MTL_ZCLAMP_PIXEL=0` old per-vertex clamp, `=0ab` alternates every 2 s), clip-range pixel cull in CULL mode
