@@ -51,6 +51,7 @@ typedef struct {
     float   pad[2];
     float   bc[4][4];           /* hpcos-xbox-port: SET_TEXTURE_BORDER_COLOR per stage (r g b a) */
     int32_t bm[4];              /* border addressing per stage: bit 0 s, bit 1 t (mode 4) */
+    float   zcull[4];           /* hppoa: clip-range cull on (1), clip min / zmax, clip max / zmax */
 } Nv2aMslFs;
 
 /* Vertex shader for a vertex program (prog != NULL: slots from `start` to

@@ -2853,6 +2853,31 @@ static DynState s_dyn;
 static uint32_t zmax_of(const uint32_t *r);
 static int s_zb_seen, s_wd_seen;
 
+/* hppoa play test 3 (the library rug and a plank patch cut along straight edges): depth is clamped per
+ * pixel (MTLDepthClipModeClamp), not per vertex (nv2a_metal_msl.c nv2a_clip). RECOMP_MTL_ZCLAMP_PIXEL=0
+ * clamps each vertex's z to [0, w] as before; =0ab alternates the two every 2 s of wall time (A/B shots
+ * of the same frozen frame). */
+static int zclamp_vertex(void)
+{
+    static int mode = -1;
+    if (mode < 0) {
+        const char *e = getenv("RECOMP_MTL_ZCLAMP_PIXEL");
+        mode = !e || *e != '0' ? 0 : e[1] ? 2 : 1;
+        fprintf(stderr, "[mtl] depth clamped per %s\n", mode == 0 ? "pixel" : mode == 1 ? "vertex (RECOMP_MTL_ZCLAMP_PIXEL=0)"
+                                                         : "vertex/pixel, 2 s each (A/B)");
+    }
+    if (mode == 2) {
+        static uint64_t t0;
+        uint64_t now = clock_gettime_nsec_np(CLOCK_MONOTONIC) / 1000000ull;
+        if (!t0) t0 = now;
+        int v = ((now - t0) / 2000u) % 2 == 0;
+        static int last = -1;
+        if (v != last) { fprintf(stderr, "[mtl] depth clamp now per %s\n", v ? "vertex" : "pixel"); last = v; }
+        return v;
+    }
+    return mode;
+}
+
 /* Returns 0 when the draw shows nothing (front-and-back culled triangles:
  * Metal has no such cull mode). */
 static int apply_dynamic(const uint32_t *r, int has_depth, uint32_t cls, float slope_k)
@@ -3513,6 +3538,10 @@ static void mtl_draw_raw_inner(const Nv2aRawBatch *b)
                     fprintf(stderr, " | s%u %08X f%02X", k, b->tex_va[k], (r[base + 1] >> 8) & 0xFF);
             }
             fprintf(stderr, " | light %u spec %u", r[0x314 / 4], r[0x3B8 / 4]);
+            if (b->xform == 1)   /* hppoa: the composite's z and w rows (a decal's z-biased projection) */
+                fprintf(stderr, " | zb %u zmm %X | mz %.6g %.6g %.6g %.6g mw %.6g %.6g %.6g %.6g vpz %.6g", r[0x338 / 4], r[0x1D78 / 4], b->composite[8],
+                        b->composite[9], b->composite[10], b->composite[11], b->composite[12], b->composite[13],
+                        b->composite[14], b->composite[15], b->vp_offset[2]);
             /* What makes a draw vanish: target, blend, colour mask, alpha test, and
              * vertex 0's position and colour (attribute 0 and 3). */
             fprintf(stderr, " | rt %08X bl %u %X %X %X cm %08X at %u %X %u",
@@ -3592,6 +3621,13 @@ static void mtl_draw_raw_inner(const Nv2aRawBatch *b)
         }
         if (sk && fidx >= sa && fidx <= sb)
             return;
+        {   /* hppoa: RECOMP_MTL_SKIP_TEX=<va> (debug A/B): drop every draw that samples that texture in any stage */
+            static int st = -1; static uint32_t stva;
+            if (st < 0) { const char *e = getenv("RECOMP_MTL_SKIP_TEX"); st = e != NULL; if (e) stva = (uint32_t)strtoul(e, NULL, 16); }
+            if (st) for (uint32_t k = 0; k < 4; k++)
+                if ((r[(0x1B00u + k * 0x40u) / 4 + 3] & 0x40000000u) && b->tex_va[k] == stva)
+                    return;
+        }
     }
     s = target(&b->surface, b->zeta_va, &d);
     if (!s)
@@ -3729,6 +3765,7 @@ static void mtl_draw_raw_inner(const Nv2aRawBatch *b)
         vb.fog[0] = r[0x2A4 / 4] != 0;
         vb.fog[1] = (int32_t)r[0x29C / 4];
         vb.fog[2] = (int32_t)r[0x2A0 / 4];
+        vb.fog[3] = zclamp_vertex();   /* nv2a_clip: the old per-vertex depth clamp */
         memcpy(vb.fogp, &r[0x9C0 / 4], 2 * sizeof(float));
         memcpy(vb.fogplane, &r[0x9D0 / 4], sizeof vb.fogplane);
         {
@@ -3778,6 +3815,19 @@ static void mtl_draw_raw_inner(const Nv2aRawBatch *b)
         }
 
         memset(&fb, 0, sizeof fb);
+        {   /* hppoa: SET_ZMIN_MAX_CONTROL ZCLAMP_EN = CULL (bits 4-7 = 0): pixels outside the clip range
+             * (SET_CLIP_MIN/MAX) are dropped (xemu glsl/psh.c). Not with the W-buffer (its depth is w).
+             * RECOMP_MTL_ZCULL=0: off (depth only clamped, as before). */
+            static int zc = -1;
+            if (zc < 0) { const char *e = getenv("RECOMP_MTL_ZCULL"); zc = !(e && *e == '0'); }
+            if (zc && !key.wdepth && !(r[0x1D78 / 4] & 0xF0u)) {
+                float cmin, cmax, zm = (float)zmax_of(r);
+                memcpy(&cmin, &r[0x394 / 4], 4); memcpy(&cmax, &r[0x398 / 4], 4);
+                if (cmax > cmin) {
+                    fb.zcull[0] = 1.0f; fb.zcull[1] = cmin / zm; fb.zcull[2] = cmax / zm;
+                }
+            }
+        }
         for (i = 0; i < 4; i++) {
             fb.tscale[i][0] = tscale[i][0];
             fb.tscale[i][1] = tscale[i][1];
@@ -4501,6 +4551,16 @@ static void mtl_flip_inner(void)
                 char path[320];
                 snprintf(path, sizeof path, "%sat%05u.bmp", dump_prefix[0] ? dump_prefix : "f", s_frame);
                 dump_surface(s, path);
+                for (const char *e = getenv("RECOMP_GL_DUMP_SURF"); e && *e; ) {   /* hppoa: the targets too */
+                    uint32_t va = (uint32_t)strtoul(e, NULL, 16);
+                    MtSurf *t = surf_find(va);
+                    if (t && t->tex) {
+                        snprintf(path, sizeof path, "%sat%05u_%08X.bmp", dump_prefix[0] ? dump_prefix : "f", s_frame, va);
+                        dump_surface(t, path);
+                    }
+                    e = strchr(e, ',');
+                    if (e) e++;
+                }
                 s_ft_dumped = 1;
                 left--;
             }
