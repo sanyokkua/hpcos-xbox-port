@@ -222,15 +222,28 @@ static const char s_vs_main_fixed[] =
     "    float4 t[4] = { in.v9, in.v10, in.v11, in.v12 };\n"
     "    if (U.u_xform == 1) {\n"
     /* Texgen and the texture matrix (xemu's vsh-ff: eye-linear planes dot
-     * the model-view position, then the stage's matrix). Sphere, normal and
-     * reflection maps are not generated: their stage keeps its coordinates. */
+     * the model-view position, then the stage's matrix). hppoa: normal map
+     * (0x8511), reflection map (0x8512, D3D's camera-space reflection vector)
+     * and sphere map (0x2402) from the eye-space normal, the model-view's 3x3
+     * applied to attribute 2 (exact for rotations and uniform scale, as the
+     * executor's lighting). */
     "        float4 eye = float4(dot(U.u_mv[0], in.v0), dot(U.u_mv[1], in.v0),\n"
     "                            dot(U.u_mv[2], in.v0), dot(U.u_mv[3], in.v0));\n"
+    "        float3 en = float3(dot(U.u_mv[0].xyz, in.v2.xyz), dot(U.u_mv[1].xyz, in.v2.xyz),\n"
+    "                           dot(U.u_mv[2].xyz, in.v2.xyz));\n"
+    "        en = length(en) > 1e-8 ? normalize(en) : float3(0.0, 0.0, 1.0);\n"
+    "        float3 eu = length(eye.xyz) > 1e-8 ? normalize(eye.xyz) : float3(0.0, 0.0, 1.0);\n"
+    "        float3 rf = eu - 2.0 * dot(en, eu) * en;\n"
+    "        float sm = 2.0 * sqrt(rf.x * rf.x + rf.y * rf.y + (rf.z + 1.0) * (rf.z + 1.0));\n"
+    "        sm = sm > 1e-8 ? sm : 1.0;\n"
     "        for (int i = 0; i < 4; i++) {\n"
     "            for (int c = 0; c < 4; c++) {\n"
     "                int g = U.u_tg[i][c];\n"
     "                if (g == 0x2400) t[i][c] = dot(U.u_tp[i * 4 + c], eye);\n"
     "                else if (g == 0x2401) t[i][c] = dot(U.u_tp[i * 4 + c], in.v0);\n"
+    "                else if (g == 0x8511 && c < 3) t[i][c] = en[c];\n"
+    "                else if (g == 0x8512 && c < 3) t[i][c] = rf[c];\n"
+    "                else if (g == 0x2402 && c < 2) t[i][c] = rf[c] / sm + 0.5;\n"
     "            }\n"
     "            if (U.u_tme[i] != 0)\n"
     "                t[i] = float4(dot(U.u_tm[i * 4], t[i]), dot(U.u_tm[i * 4 + 1], t[i]),\n"

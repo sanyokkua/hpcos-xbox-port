@@ -3742,8 +3742,13 @@ static void mtl_draw_raw_inner(const Nv2aRawBatch *b)
             for (k = 0; k < 4; k++) {
                 for (c = 0; c < 4; c++) {
                     uint32_t g = r[(0x3C0 + k * 16 + c * 4) / 4];
-                    vb.tg[k][c] = (g == 0x2400 || g == 0x2401) ? (int32_t)g : 0;
-                    if (g && g != 0x2400 && g != 0x2401) {   /* sphere/normal/reflection map: not generated */
+                    int known = g == 0x2400 || g == 0x2401 || g == 0x2402 || g == 0x8511 || g == 0x8512;
+                    static int maps = -1;       /* RECOMP_MTL_TEXGEN_MAPS=0: sphere/normal/reflection not generated */
+                    if (maps < 0) { const char *e = getenv("RECOMP_MTL_TEXGEN_MAPS"); maps = !(e && *e == '0'); }
+                    if (known && (g == 0x2402 || g == 0x8511 || g == 0x8512) && (!maps || !(b->attr_present & 4u)))
+                        known = 0;                      /* off, or no normals: keep the coordinates */
+                    vb.tg[k][c] = known ? (int32_t)g : 0;
+                    if (g && !known) {   /* object/eye-linear, sphere, normal, reflection map handled; others not */
                         static uint32_t seen[8]; static int ns;
                         int s2, have = 0;
                         for (s2 = 0; s2 < ns; s2++) have |= seen[s2] == (g | (uint32_t)k << 28);
