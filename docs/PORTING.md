@@ -283,6 +283,24 @@ Three fixes hppoa-xbox-port found (its `7b59edc`, `c053b83`, `79c7af5`); none ch
    Screenshots of on/off runs differ by as much as any two runs (they are not frame-locked); static scenes (w8, 2-9 k px) match.
    No crash, `tools/smoke.sh 60` OK. A scene that uses these (a reflective or env-mapped surface, a polygon-offset decal) is untested.
 
+### 3h, round 5: NV2A renderer fixes from hppoa's xemu audit (Unreleased)
+
+10. **Five fixes** (hppoa `0961689`, patch hand-merged; each has a switch): depth clamped per pixel (`nv2a_clip`;
+    `RECOMP_MTL_ZCLAMP_PIXEL=0` old per-vertex clamp, `=0ab` alternates every 2 s), clip-range pixel cull in CULL mode
+    (`RECOMP_MTL_ZCULL=0`; **skipped for W-buffer draws** via `key.wdepth`), stencil op 0 = ZERO (`RECOMP_MTL_STENCIL_ZERO=0`),
+    alpha test on rounded 8-bit alpha (`gl_psh.c` is shared with Metal; `RECOMP_ATEST_ROUND=0`), no FF normal flip toward the eye
+    (`RECOMP_FF_FLIP_NORMALS=1` restores it). Not taken: four dev-log hunks (`RECOMP_MTL_ZCLAMP_LOG`, `RECOMP_DL_ATTRS`,
+    `[dl]` clip/stencil fields, per-vertex screen position) that did not apply; the two debug switches (`RECOMP_MTL_SKIP_TEX`,
+    `RECOMP_GL_DUMP_SURF`) came with the patch.
+    **Check** (temporary counters and a per-frame parity switch, not committed): route = `HPCOS_WARP=<level>:0 HPCOS_FF_AUTO=1
+    RECOMP_PAD_PRESS=0x1010,2500,200` (without the pad press the game stays in the movies: no 3D draws at all, which also means the
+    rounds 2-4 routes reached little 3D). In 3D (levels 12 and 4, ~5,300 frames): **CoS uses the W-buffer for ~88 % of draws**
+    (3.1 M of 3.6 M), so the cull applies to the other ~12 % (~420 k draws); **stencil op 0: 0 uses; FF lighting normals: 0 calls**
+    (CoS lights with vertex programs), so those two fixes change nothing here. Controlled A/B in one process (clamp or cull
+    alternating per frame, `RECOMP_GL_DUMP_AT` 6 consecutive frames at 60 s and 85 s): alternating frames differ no more than
+    same-parity ones (~0.7-4 k px of animation; the larger steps are scene changes, not parity). No visible change, no regression.
+    The alpha rounding is a shader-text change (cannot alternate); it is untested beyond smoke. `tools/smoke.sh 60` OK.
+
 ## 4. Port features
 
 - **Settings menu** (the NFS ports' overlay): this game's rows in `engine/src/overlay/`. Pages: Display, Graphics, Audio, Input,

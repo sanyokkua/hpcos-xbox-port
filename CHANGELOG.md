@@ -13,6 +13,7 @@ Engine and tool fixes backported from the Prisoner of Azkaban port (no change to
 - `tools/immscan.py`: finds functions referenced only by immediates (0 on this disc).
 - Pushbuffer executor, from the Prisoner of Azkaban port: 1-vertex point and 2-vertex line batches are no longer dropped (the Whomping Willow's rain is drawn now); inline/SET_VERTEX batches in fixed-function mode are transformed and `SET_VERTEX_DATA4F` diffuse is used (neither occurs in this game's routes; `RECOMP_INLINE_FF=0` restores the old rule).
 - Metal renderer, from the Prisoner of Azkaban port: P8 textures hashed in full (changes were missed), polygon offset slope scaled with the render scale (`RECOMP_MTL_ZSLOPE=0` off), reflection/normal/sphere map texgen (`RECOMP_MTL_TEXGEN_MAPS=0` off). None is reached on the routes tested.
+- Metal renderer, from the Prisoner of Azkaban port (xemu audit): depth clamped per pixel, not per vertex (`RECOMP_MTL_ZCLAMP_PIXEL=0` off); clip-range pixel cull in CULL mode, skipped for W-buffer draws (`RECOMP_MTL_ZCULL=0` off); stencil op 0 is ZERO (`RECOMP_MTL_STENCIL_ZERO=0` off); alpha test compares rounded 8-bit alpha (`RECOMP_ATEST_ROUND=0` off); fixed-function lighting no longer flips normals toward the eye (`RECOMP_FF_FLIP_NORMALS=1` restores it). No visible change on the tested routes.
 
 ## 0.1.0 (2026-11-24)
 
