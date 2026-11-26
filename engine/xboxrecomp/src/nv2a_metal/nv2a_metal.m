@@ -4311,6 +4311,11 @@ static void present(MtSurf *s)
     drawable = [s_layer nextDrawable];
     if (!drawable)
         return;
+    /* The frame is laid out in the drawable it goes to: the layer's drawableSize read before nextDrawable can
+     * still be the window's while the drawable is already the full screen's (SDL resizes it on the main thread
+     * as the window goes full screen), and the first frames then filled only the top-left part (from
+     * hpgof-xbox-port c5131c0). */
+    ds = CGSizeMake((CGFloat)drawable.texture.width, (CGFloat)drawable.texture.height);
     s_copy_gamma = s_gamma_on;
     s_copy_fxaa = fxaa_on();
     if (s && s_drew_any) {

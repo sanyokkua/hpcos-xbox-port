@@ -31,7 +31,7 @@ the installer, and keeps the same style as the other ports in this series ([Sorc
 [NFS Underground 2](https://github.com/sanyokkua/nfsu2-xbox-port), [NFS Underground](https://github.com/sanyokkua/nfsu-xbox-port),
 [NFS Hot Pursuit 2](https://github.com/sanyokkua/nfs-hp2-ps2-port)).
 
-**Status:** version 0.1.1. Played from the logos and the intro movie through New Game, the Burrow, Knockturn Alley and
+**Status:** version 0.1.2. Played from the logos and the intro movie through New Game, the Burrow, Knockturn Alley and
 Borgin & Burkes, Diagon Alley (Flourish & Blotts, the Leaky Cauldron, the Magical Menagerie), the Whomping Willow and the
 arrival at Hogwarts into the first school day, at 60 fps at 3x on an M1 Pro, with sound. Saving and loading work.
 

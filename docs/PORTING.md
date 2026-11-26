@@ -301,6 +301,25 @@ Three fixes hppoa-xbox-port found (its `7b59edc`, `c053b83`, `79c7af5`); none ch
     same-parity ones (~0.7-4 k px of animation; the larger steps are scene changes, not parity). No visible change, no regression.
     The alpha rounding is a shader-text change (cannot alternate); it is untested beyond smoke. `tools/smoke.sh 60` OK.
 
+## 3i. Checks against the Goblet of Fire port (2026-11-26, released in 0.1.2)
+
+GoF found two renderer bugs in the shared Metal backend and backported lifter, disassembler and kernel fixes (local branch
+`gof-backports`). Tested here:
+- **Movie freeze (GoF `8acec1d`, linear textures hashed in full): not needed.** CoS movies never reach `tex_get`: the XMV
+  frames go through the video-overlay movie layer (`nv2a_mtl_movie_frame`), uploaded every frame with no hash. A temporary
+  log of every linear (pitch) texture drawn counted **0** through the logos, the intro and 120 s in level 12. Screenshots every
+  0.2 s through the EA logo, the WB logo and the intro: no two consecutive shots alike inside the movies (the only repeats are
+  the screen before the first movie and the static legal-text screen).
+- **First frames full screen (GoF `c5131c0`): taken.** `present()` now lays out the frame in the drawable's texture size, not the
+  `drawableSize` read before `nextDrawable`. A temporary log of the two sizes found no mismatch in 3 runs here, so the fix is a
+  no-op on these routes; the code had the same race as GoF.
+- **`gof-backports` (7 commits): not merged.** The lift with it is byte-identical to `main`'s (6,151 functions, 13 stubs,
+  0 real code; only the runtime header `recomp_types.h` gains unused SSE helpers). Its kernel timer fixes are unreachable:
+  this XBE imports neither `NtCreateTimer` (193) nor `NtSetTimerEx` (229). The rest are dev aids (crash report, offscreen
+  screenshots with no drawable, seed/pointer scan tools, a stricter DMG test).
+- Verified: `tools/smoke.sh 75` OK; `HPCOS_WARP=12:0 HPCOS_FF_AUTO=1 RECOMP_PAD_PRESS=0x1010,2500,200` 120 s at the Whomping
+  Willow, 0 wild calls.
+
 ## 4. Port features
 
 - **Settings menu** (the NFS ports' overlay): this game's rows in `engine/src/overlay/`. Pages: Display, Graphics, Audio, Input,

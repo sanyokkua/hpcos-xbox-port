@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.2 (2026-11-26)
+
+- Full screen from the first frame: the picture is laid out in the size of the frame it is drawn into, so the first frames
+  after the window goes full screen can no longer fill only the top-left part of the screen (a fix from the Goblet of Fire
+  port; not seen in this game's tests, where the screen had its full size from the first frame).
+
 ## 0.1.1 (2026-11-25)
 
 Fixes and speed-ups carried over from the Prisoner of Azkaban port. On the routes tested for this game nothing looks different; the changes make the installer faster and the game more robust.
